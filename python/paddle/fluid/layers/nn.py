@@ -220,6 +220,7 @@ __all__ = [
     'var_conv_2d',
     'shard_index',
     'hard_swish',
+    'mix_embed',
 ]
 
 kIgnoreIndex = -100
@@ -13631,6 +13632,47 @@ def match_matrix_tensor(x,
         attrs={'dim_t': channel_num})
 
     return helper.append_activation(mm_res), tmp_res
+
+
+def mix_embedding(input,
+                  size,
+                  lr,
+                #   l1_reg=1e-10,
+                #   weight_decay=1e-10,
+                  mark_idx=None,
+                  pool_type='sum',
+                  param_attr=None,
+                  dtype='float32',
+                  name=None):
+
+    helper = LayerHelper('mix_embedding', **locals())
+    w = helper.create_parameter(
+        attr=helper.param_attr, shape=size, dtype=dtype, is_bias=False)
+    out = helper.create_variable_for_type_inference(dtype)
+    mark_idx = -1 if mard_idx is None else mard_idx if mard_idx >= 0 else (
+        size[0] + mard_idx)
+
+    max_index = helper.create_variable_for_type_inference(dtype)
+
+    helper.append_op(
+        type='mix_embed',
+        inputs={'Ids': input,
+                'W': w},
+        outputs={'Out': out,
+                 'max_index': max_index},
+        attrs={
+            'lr': lr,
+            # 'l1_reg': l1_reg,
+            # 'weight_decay': weight_decay,
+            'mark_idx': mark_idx,
+            'pool_type': pool_type,
+        })
+
+    # when pool_type is max, variable max_index is initialized,
+    # so we stop the gradient explicitly here
+    if pool_type == 'max':
+        max_index.stop_gradient = True
+    return out
 
 
 def shard_index(input, index_num, nshards, shard_id, ignore_value=-1):

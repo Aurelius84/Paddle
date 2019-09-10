@@ -105,6 +105,16 @@ static const unsigned int SSE_CUT_LEN_MASK = 3U;
 #endif
 
 template <typename T>
+void lego_cpu_axpby(const int N, const T alpha, const T* x, const T beta,
+                    T* y) {
+#ifdef TYPE_USE_FLOAT
+  cblas_saxpby(N, alpha, x, 1, beta, y, 1);
+#else
+  cblas_daxpby(N, alpha, x, 1, beta, y, 1);
+#endif
+}
+
+template <typename T>
 inline void sse_axpy(const T* x, T* y, size_t len, const T alpha) {
   unsigned int jjj, lll;
   jjj = lll = 0;
@@ -131,6 +141,66 @@ inline void sse_axpy(const T* x, T* y, size_t len, const T alpha) {
 #endif
   for (; jjj < len; jjj++) {
     y[jjj] += alpha * x[jjj];
+  }
+}
+
+template <typename T>
+inline void sse_max(const T* input_f, T* max_data, int* max_index,
+                    size_t M_f, size_t N) {
+  if (M_f == 0) {
+    return;
+  }
+  unsigned int j = 0;
+  unsigned int lll = 0;
+
+  // init by first row
+  memcpy(max_data, input_f, sizeof(T) * N);
+  const T* input = input_f + N;
+  size_t m = M_f - 1;
+#if defined(USE_AVX)
+  lll = N & ~AVX_CUT_LEN_MASK;
+  __m256x mm0;
+  for (j = 0; j < lll; j += AVX_STEP_SIZE) {
+    mm0 = _mm256_load_px(max_data + j);
+    const DTYPE* input_t = input + j;
+    for (size_t i = 0; i < m; i++) {
+      const DTYPE* input_data = input_t + i * N;
+      __m256x mm_input = _mm256_load_px(input_data);
+      mm0 = _mm256_max_px(mm_input, mm0);
+      mm_input = _mm256_load_px(input_data + AVX_STEP_SIZE);
+    }
+    _mm256_store_px(max_data + j, mm0);
+  }
+#elif defined(USE_SSE)
+  lll = N & ~SSE_CUT_LEN_MASK;
+  __m128x mm0;
+  for (j = 0; j < lll; j += SSE_STEP_SIZE) {
+    mm0 = _mm_load_px(max_data + j);
+    const T* input_t = input + j;
+    for (size_t i = 0; i < m; i++) {
+      const T* input_data = input_t + i * N;
+      __m128x mm_input = _mm_load_px(input_data);
+      mm0 = _mm_max_px(mm_input, mm0);
+    }
+    _mm_store_px(max_data + j, mm0);
+  }
+#endif
+  for (; j < N; ++j) {
+    for (size_t i = 0; i < m; i++) {
+      max_data[j] = max(max_data[j], input[i * N + j]);
+    }
+  }
+  if (max_index != NULL) {
+    // find max_index
+    for (int i = 0; i < N; i++) {
+      T max = max_data[i];
+      for (int j = 0; j < M_f; j++) {
+        if (max == input_f[i + j * N]) {
+          max_index[i] = j;
+          break;
+        }
+      }
+    }
   }
 }
 
