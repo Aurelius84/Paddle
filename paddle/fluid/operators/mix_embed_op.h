@@ -87,7 +87,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
 
       auto ids_dims = ids_t->dims();
       // auto _cap_l = ids_dims[0];
-      size_t _cap_e = ids_dims[1];
+      int _cap_e = ids_dims[1];
       auto offset = ids_t->lod()[0];
       std::vector<size_t> top_offset;
       top_offset.resize(offset.size());
@@ -207,7 +207,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       auto *ids_t = context.Input<LoDTensor>("Ids");  // int tensor
       auto *output_t = context.Input<LoDTensor>("Out");  // float tensor
       auto *d_out = context.Input<LoDTensor>(framework::GradVarName("Out"));  // float tensor
-      auto *_max_index = context.Output<Tensor>("max_index"); 
+      auto *_max_index = context.Iutput<Tensor>("max_index"); 
       auto *_mix_char_offset = context.Input<Tensor>("mix_char_offset");
       // auto *_buffer = context.Input<Tensor>("buffer");
       auto *table_var = context.Input<LoDTensor>("W");
@@ -231,15 +231,13 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       const auto top_offset = output_t->lod()[0];
 
       // const auto *top_data = d_out->data<T>();
-      auto *top_diff = d_out->mutable_data<T>(context.GetPlace());
+      auto *top_diff = d_out->data<T>();
 
       const int64_t *bottom_data = ids_t->data<int64_t>();
-      T *weights = table_var->mutable_data<T>(context.GetPlace());
+      T *weights = table_var->data<T>();
 
-      auto mlr = -1.0 * _lr;
-      int top_l = top_offset[top_offset.size() - 1];
-      _mix_char_offset->Resize(framework::make_ddim({top_l, 1}));
-      int *mix_offset = _mix_char_offset->mutable_data<size_t>(context.GetPlace());
+      auto mlr = -1.0 * _lr;s
+      const auto *mix_offset = _mix_char_offset->data<int>();
       // if (_l1_reg > 1e-10) {  // L1
       //   for (int k = 0; k < top_data->numel(); k++) {
       //     T val = top_data[k];
