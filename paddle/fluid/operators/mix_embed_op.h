@@ -88,7 +88,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       auto _cap_l = ids_dims[0];
       auto _cap_e = ids_dims[1];
       auto offset = ids_t->lod()[0];
-      std::vector<int> top_offset;
+      std::vector<size_t> top_offset;
       top_offset.resize(offset.size());
       top_offset[0] = 0;
 
@@ -99,7 +99,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       if (mix_char_l < offset.size()) {
         mix_char_l = offset.size();
       }
-      _mix_char_offset->Resize({mix_char_l});
+      _mix_char_offset->Resize(framework::make_ddim({mix_char_l}));
       int *mix_offset = _mix_char_offset->mutable_data<int>(context.GetPlace());
       // int64_t *ids = const_cast<int64_t *>(ids_t->data<int64_t>());
       // int64_t ids_numel = ids_t->numel();
@@ -119,7 +119,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       }
 
       int top_l = top_offset[top_offset.size() - 1];
-      
+
       framework::LoD top_lod;
       top_lod.push_back(top_offset);
       output_t->set_lod(top_lod);
@@ -129,7 +129,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       memset(top_data, 0, _cap_e * top_l * sizeof(T));
 
       if (_pool_type == "max") {
-        _max_index->Resize({top_l, _cap_e});
+        _max_index->Resize(framework::make_ddim({top_l, _cap_e}));
       }
 
       int *max_index = _max_index->mutable_data<int>(context.GetPlace());
@@ -141,7 +141,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
           // gen sub embedding seqs
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
-          _buffer->Resize({1, sum_num, _cap_e});
+          _buffer->Resize(framework::make_ddim({1, sum_num, _cap_e}));
           T *sub_data = _buffer->mutable_data<T>(context.GetPlace());
           int sub_j = 0;
           for (int j = 0; j < w; ++j) {
@@ -159,7 +159,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
             top_j++;
             top_offset_j = top_offset[i] + top_j;
             sum_num = mix_offset[top_offset_j];
-            _buffer->Resize({1, sum_num, _cap_e});
+            _buffer->Resize(framework::make_ddim({1, sum_num, _cap_e}));
             sub_data = _buffer->mutable_data<T>(context.GetPlace());
             sub_j = 0;
           }
@@ -179,7 +179,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
                     const T *top_diff, const T *sub_index, const int out_offset,
                     const int emb_size, const float mlr) {
       if (pool_type == "max") {
-        _max_bp_buffer->Resize({1, len, emb_size});
+        _max_bp_buffer->Resize(framework::make_ddim({1, len, emb_size}));
         T *diff = _max_bp_buffer->mutable_data<T>();
         memset(diff, 0, len * emb_size * sizeof(T));
         const int *max_index = _max_index->data<int>() + out_offset * emb_size;
@@ -261,7 +261,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
           // keep sub embedding indices
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
-          _buffer->Resize({1, sum_num, 1});
+          _buffer->Resize(framework::make_ddim({1, sum_num, 1}));
           T *sub_data = _buffer->mutable_data<T>(context.GetPlace());
           int sub_j = 0;
 
@@ -279,7 +279,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
             top_j++;
             top_offset_j = top_offset[i] + top_j;
             sum_num = mix_offset[top_offset_j];
-            _buffer->Reisize({1, sum_num, 1});
+            _buffer->Resize(framework::make_ddim({1, sum_num, 1}));
             sub_data = _buffer->mutable_data<T>(context.GetPlace());
             sub_j = 0;
           }
@@ -287,7 +287,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
           pooling_bp(_pool_type, _max_index, _max_bp_buffer, sum_num, weights,
                      top_diff, sub_data, top_offset_j, _cap_e, mlr);
         } else {
-          LOG(WARNING) << "zero len sequence " << i " / " << top_offset.size() - 1;
+          LOG(WARNING) << "zero len sequence " << i << " / " << top_offset.size() - 1;
         }
       }
     }

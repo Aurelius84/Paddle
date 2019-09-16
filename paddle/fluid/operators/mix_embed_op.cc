@@ -22,8 +22,6 @@ limitations under the License. */
 namespace paddle {
 namespace operators {
 
-constexpr int64_t kNoPadding = -1;
-
 class MixEmbedOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
@@ -172,10 +170,8 @@ REGISTER_OPERATOR(mix_embed_grad, ops::MixEmbedOpGrad,
                   ops::MixEmbedOpGradVarTypeInference);
 
 REGISTER_OP_CPU_KERNEL(mix_embed,
-                       ops::MixEmbedKernel<plt::CPUDeviceContext, float>,
-                       //  ops::MixEmbedKernel<plt::CPUDeviceContext, double>
-);
+                       ops::MixEmbedKernel<plt::CPUDeviceContext, float>);
+//  ops::MixEmbedKernel<plt::CPUDeviceContext, double>
 REGISTER_OP_CPU_KERNEL(mix_embed_grad,
-                       ops::MixEmbedGradKernel<plt::CPUDeviceContext,float>,
-                       //  ops::MixEmbedGradKernel<plt::CPUDeviceContext, double>
-);
+                       ops::MixEmbedGradKernel<plt::CPUDeviceContext, float>);
+//  ops::MixEmbedGradKernel<plt::CPUDeviceContext, double>
