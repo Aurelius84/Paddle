@@ -76,9 +76,9 @@ class MixEmbedKernel : public framework::OpKernel<T> {
     void Compute(const framework::ExecutionContext &context) const override {
       auto *ids_t = context.Input<LoDTensor>("Ids");      // int tensor
       auto *output_t = context.Output<LoDTensor>("Out");  // float tensor
-      auto *_max_index = context.Output<LoDTensor>("max_index");
-      auto *_mix_char_offset = context.Output<LoDTensor>("mix_char_offset");
-      auto *_buffer = context.Output<LoDTensor>("buffer");
+      auto *_max_index = context.Output<Tensor>("max_index");
+      auto *_mix_char_offset = context.Output<Tensor>("mix_char_offset");
+      auto *_buffer = context.Output<Tensor>("buffer");
       auto *table_var = context.Input<LoDTensor>("W");
       const int mark_sqlit = context.Attr<int>("mark_idx");
       const auto _pool_type = context.Attr<std::string>("pool_type");
@@ -99,8 +99,8 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       if (mix_char_l < offset.size()) {
         mix_char_l = offset.size();
       }
-      _mix_char_offset.Resize({mix_char_l});
-      int *mix_offset = _mix_char_offset.mutable_data();
+      _mix_char_offset->Resize({mix_char_l});
+      int *mix_offset = _mix_char_offset->mutable_data<int>(context.GetPlace());
       // int64_t *ids = const_cast<int64_t *>(ids_t->data<int64_t>());
       // int64_t ids_numel = ids_t->numel();
 
@@ -119,7 +119,12 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       }
 
       int top_l = top_offset[top_offset.size() - 1];
-      output_t->Resize({top_l, _cap_e});
+      
+      framework::LoD top_lod;
+      top_lod.push_back(top_offset);
+      output_t->set_lod(top_lod);
+      output_t->Resize(framework::make_ddim({top_l, _cap_e}));
+
       T *top_data = output_t->mutable_data<T>(context.GetPlace());
       memset(top_data, 0, _cap_e * top_l * sizeof(T));
 
@@ -127,7 +132,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
         _max_index->Resize({top_l, _cap_e});
       }
 
-      int *max_index = _max_index.mutable_data();
+      int *max_index = _max_index->mutable_data<int>(context.GetPlace());
       for (int i = 0; i < offset.size() - 1; ++i) {
         int w = offset[i + 1] - offset[i];
         if (w > 0) {
@@ -136,8 +141,8 @@ class MixEmbedKernel : public framework::OpKernel<T> {
           // gen sub embedding seqs
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
-          _buffer.Resize({1, sum_num, _cap_e});
-          T *sub_data = _buffer.mutable_data<T>(context.GetPlace());
+          _buffer->Resize({1, sum_num, _cap_e});
+          T *sub_data = _buffer->mutable_data<T>(context.GetPlace());
           int sub_j = 0;
           for (int j = 0; j < w; ++j) {
             unsigned int word_idx =
@@ -154,8 +159,8 @@ class MixEmbedKernel : public framework::OpKernel<T> {
             top_j++;
             top_offset_j = top_offset[i] + top_j;
             sum_num = mix_offset[top_offset_j];
-            _buffer.Resize({1, sum_num, _cap_e});
-            sub_data = _buffer.mutable_data<T>(context.GetPlace());
+            _buffer->Resize({1, sum_num, _cap_e});
+            sub_data = _buffer->mutable_data<T>(context.GetPlace());
             sub_j = 0;
           }
           // to handle the end group of char for each sentences
@@ -282,7 +287,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
           pooling_bp(_pool_type, _max_index, _max_bp_buffer, sum_num, weights,
                      top_diff, sub_data, top_offset_j, _cap_e, mlr);
         } else {
-          DLOG("zero len sequence %d / %d", i, top_offset.size() - 1);
+          LOG(WARNING) << "zero len sequence " << i " / " << top_offset.size() - 1;
         }
       }
     }

@@ -163,6 +163,7 @@ class MixEmbedOpGradVarTypeInference : public framework::VarTypeInference {
 }  // namespace paddle
 
 namespace ops = paddle::operators;
+namespace plt = paddle::platform;
 REGISTER_OPERATOR(mix_embed, ops::MixEmbedOp, ops::MixEmbedOpMaker,
                   ops::MixEmbedGradOpDescMaker);
 
@@ -170,9 +171,11 @@ REGISTER_OPERATOR(mix_embed_grad, ops::MixEmbedOpGrad,
                   ops::MixEmbedGradOpNoBuffer,
                   ops::MixEmbedOpGradVarTypeInference);
 
-REGISTER_OP_CPU_KERNEL(mix_embed, ops::MixEmbedKernel<float>,
-                       //  ops::MixEmbedKernel<double>
+REGISTER_OP_CPU_KERNEL(mix_embed,
+                       ops::MixEmbedKernel<plt::CPUDeviceContext, float>,
+                       //  ops::MixEmbedKernel<plt::CPUDeviceContext, double>
 );
-REGISTER_OP_CPU_KERNEL(mix_embed_grad, ops::MixEmbedGradKernel<float>,
-                      //  ops::MixEmbedGradKernel<double>
-                       );
+REGISTER_OP_CPU_KERNEL(mix_embed_grad,
+                       ops::MixEmbedGradKernel<plt::CPUDeviceContext,float>,
+                       //  ops::MixEmbedGradKernel<plt::CPUDeviceContext, double>
+);
