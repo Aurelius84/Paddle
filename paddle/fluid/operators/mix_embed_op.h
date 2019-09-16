@@ -56,9 +56,9 @@ inline int scan_mark(const int64_t *data, const int len, const int mark,
 template <typename DeviceContext, typename T>
 class MixEmbedKernel : public framework::OpKernel<T> {
  public:
-  void pooling_ff(const std::string pool_type, int *max_index, const int len,
+  void pooling_ff(const std::string pool_type, int *max_index, const size_t len,
                   const int64_t *in, T *out, const int out_offset,
-                  const int emb_size) const {
+                  const size_t emb_size) const {
     if (pool_type == "max") {
       sse_max(in, out + out_offset * emb_size,
               max_index + out_offset * emb_size, len, emb_size);
@@ -87,7 +87,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
 
       auto ids_dims = ids_t->dims();
       // auto _cap_l = ids_dims[0];
-      auto _cap_e = ids_dims[1];
+      size_t _cap_e = ids_dims[1];
       auto offset = ids_t->lod()[0];
       std::vector<size_t> top_offset;
       top_offset.resize(offset.size());
@@ -138,12 +138,12 @@ class MixEmbedKernel : public framework::OpKernel<T> {
         int w = offset[i + 1] - offset[i];
         if (w > 0) {
           int top_j = 0;
-          int sum_num = 0;
+          size_t sum_num = 0;
           // gen sub embedding seqs
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
           _buffer->Resize(framework::make_ddim({1, sum_num, _cap_e}));
-          T *sub_data = _buffer->mutable_data<T>(context.GetPlace());
+          T *sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
           int sub_j = 0;
           for (int j = 0; j < w; ++j) {
             unsigned int word_idx =
@@ -155,13 +155,13 @@ class MixEmbedKernel : public framework::OpKernel<T> {
               continue;
             }
             pooling_ff(_pool_type, max_index,  sum_num, sub_data, top_data,
-                       top_offset_j, _cap_e);
+                       (const size_t)top_offset_j, _cap_e);
             // move to next sub seqs
             top_j++;
             top_offset_j = top_offset[i] + top_j;
             sum_num = mix_offset[top_offset_j];
             _buffer->Resize(framework::make_ddim({1, sum_num, _cap_e}));
-            sub_data = _buffer->mutable_data<T>(context.GetPlace());
+            sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
             sub_j = 0;
           }
           // to handle the end group of char for each sentences
@@ -212,7 +212,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       auto *d_out = context.Input<LoDTensor>(framework::GradVarName("Out"));  // float tensor
       auto *_max_index = context.Output<Tensor>("max_index"); 
       auto *_mix_char_offset = context.Input<Tensor>("mix_char_offset");
-      auto *_buffer = context.Input<Tensor>("buffer");
+      // auto *_buffer = context.Input<Tensor>("buffer");
       auto *table_var = context.Input<LoDTensor>("W");
       const int mark_sqlit = context.Attr<int>("mark_idx");
       const auto _pool_type = context.Attr<std::string>("pool_type");
@@ -240,7 +240,8 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       T *weights = table_var->mutable_data<T>(context.GetPlace());
 
       auto mlr = -1.0 * _lr;
-
+      int top_l = top_offset[top_offset.size() - 1];
+      _mix_char_offset->Resize(framework::make_ddim({top_l, 1}));
       int *mix_offset = _mix_char_offset->mutable_data<int>(context.GetPlace());
       // if (_l1_reg > 1e-10) {  // L1
       //   for (int k = 0; k < top_data->numel(); k++) {
@@ -254,16 +255,17 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       //   sse_axpy(top_data, top_diff, top_data->numel(), _weight_decay);
       // }
       Tensor *_max_bp_buffer = nullptr;
+      Tensor *_buffer = nullptr;
       for (int i = 0; i < offset.size() - 1; ++i) {
         int w = offset[i + 1] - offset[i];
         if (w > 0) {
           int top_j = 0;
-          int sum_num = 0;
+          size_t sum_num = 0;
           // keep sub embedding indices
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
           _buffer->Resize(framework::make_ddim({1, sum_num, 1}));
-          T *sub_data = _buffer->mutable_data<T>(context.GetPlace());
+          T *sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
           int sub_j = 0;
 
           for (int j = 0; j < w; ++j) {
@@ -281,7 +283,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
             top_offset_j = top_offset[i] + top_j;
             sum_num = mix_offset[top_offset_j];
             _buffer->Resize(framework::make_ddim({1, sum_num, 1}));
-            sub_data = _buffer->mutable_data<T>(context.GetPlace());
+            sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
             sub_j = 0;
           }
           // to handle the group at end
