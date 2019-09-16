@@ -22,6 +22,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/selected_rows.h"
 #include "paddle/fluid/operators/math/blas.h"
+#include "paddle/fluid/operators/search_compute.h"
 
 namespace paddle {
 namespace operators {
@@ -57,7 +58,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
  public:
   void pooling_ff(const std::string pool_type, int *max_index, const int len,
                   const int64_t *in, T *out, const int out_offset,
-                  const int emb_size) {
+                  const int emb_size) const {
     if (pool_type == "max") {
       sse_max(in, out + out_offset * emb_size,
               max_index + out_offset * emb_size, len, emb_size);
@@ -82,10 +83,10 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       auto *table_var = context.Input<LoDTensor>("W");
       const int mark_sqlit = context.Attr<int>("mark_idx");
       const auto _pool_type = context.Attr<std::string>("pool_type");
-      int64_t padding_idx = context.Attr<int64_t>("padding_idx");
+      // int64_t padding_idx = context.Attr<int64_t>("padding_idx");
 
       auto ids_dims = ids_t->dims();
-      auto _cap_l = ids_dims[0];
+      // auto _cap_l = ids_dims[0];
       auto _cap_e = ids_dims[1];
       auto offset = ids_t->lod()[0];
       std::vector<size_t> top_offset;
@@ -177,7 +178,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
     void pooling_bp(const std::string pool_type, Tensor *_max_index,
                     Tensor *_max_bp_buffer, const int len, T *weights,
                     const T *top_diff, const T *sub_index, const int out_offset,
-                    const int emb_size, const float mlr) {
+                    const int emb_size, const float mlr) const {
       if (pool_type == "max") {
         _max_bp_buffer->Resize(framework::make_ddim({1, len, emb_size}));
         T *diff = _max_bp_buffer->mutable_data<T>();
@@ -209,9 +210,9 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       auto *ids_t = context.Input<LoDTensor>("Ids");  // int tensor
       auto *output_t = context.Input<LoDTensor>("Out");  // float tensor
       auto *d_out = context.Input<LoDTensor>(framework::GradVarName("Out"));  // float tensor
-      auto *_max_index = context.Output<LoDTensor>("max_index"); 
-      auto *_mix_char_offset = context.Input<LoDTensor>("mix_char_offset");
-      auto *_buffer = context.Input<LoDTensor>("buffer");
+      auto *_max_index = context.Output<Tensor>("max_index"); 
+      auto *_mix_char_offset = context.Input<Tensor>("mix_char_offset");
+      auto *_buffer = context.Input<Tensor>("buffer");
       auto *table_var = context.Input<LoDTensor>("W");
       const int mark_sqlit = context.Attr<int>("mark_idx");
       const auto _pool_type = context.Attr<std::string>("pool_type");
@@ -232,7 +233,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       const auto offset = ids_t->lod()[0];
       const auto top_offset = output_t->lod()[0];
 
-      const auto *top_data = d_out->data<T>();
+      // const auto *top_data = d_out->data<T>();
       auto *top_diff = d_out->mutable_data<T>(context.GetPlace());
 
       const int64_t *bottom_data = ids_t->data<int64_t>();
@@ -240,7 +241,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
 
       auto mlr = -1.0 * _lr;
 
-      int *mix_offset = _mix_char_offset->mutable_data<T>(context.GetPlace());
+      int *mix_offset = _mix_char_offset->mutable_data<int>(context.GetPlace());
       // if (_l1_reg > 1e-10) {  // L1
       //   for (int k = 0; k < top_data->numel(); k++) {
       //     T val = top_data[k];
