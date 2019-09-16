@@ -18,6 +18,7 @@ limitations under the License. */
 #include <cfloat>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
@@ -188,7 +189,7 @@ inline void sse_max(const T* input_f, T* max_data, int* max_index,
 #endif
   for (; j < N; ++j) {
     for (size_t i = 0; i < m; i++) {
-      max_data[j] = max(max_data[j], input[i * N + j]);
+      max_data[j] = std::max(max_data[j], input[i * N + j]);
     }
   }
   if (max_index != NULL) {

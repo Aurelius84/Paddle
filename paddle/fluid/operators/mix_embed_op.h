@@ -172,13 +172,14 @@ class MixEmbedKernel : public framework::OpKernel<T> {
 template <typename DeviceContext, typename T>
 class MixEmbedGradKernel : public framework::OpKernel<T> {
  public:
-  void pooling_bp(const std::string pool_type, Tensor *_max_index,
-                  Tensor *_max_bp_buffer, const int len, T *weights,
-                  const T *top_diff, const T *sub_index, const int out_offset,
-                  const int emb_size, const float mlr) const {
+  void pooling_bp(
+      const framework::ExecutionContext &context, const std::string pool_type,
+      const Tensor *_max_index, Tensor *_max_bp_buffer, const int len,
+      T *weights, const T *top_diff, const T *sub_index, const int out_offset,
+      const int emb_size, const float mlr) const {
     if (pool_type == "max") {
       _max_bp_buffer->Resize(framework::make_ddim({1, len, emb_size}));
-      T *diff = _max_bp_buffer->mutable_data<T>();
+      T *diff = _max_bp_buffer->mutable_data<T>(context.GetPlace());
       memset(diff, 0, len * emb_size * sizeof(T));
       const int *max_index = _max_index->data<int>() + out_offset * emb_size;
       for (int i = 0; i < emb_size; ++i) {
@@ -187,7 +188,7 @@ class MixEmbedGradKernel : public framework::OpKernel<T> {
       }
       for (int i = 0; i < len; ++i) {
         const int word_idx = sub_index[i];
-        lego_cpu_axpby(emb_size, mlr, diff + i * emb_size, 1.0,
+        lego_cpu_axpby(emb_size, mlr, diff + i * emb_size, (T)1.0,
                        weights + word_idx * emb_size);
       }
     } else {
@@ -196,7 +197,7 @@ class MixEmbedGradKernel : public framework::OpKernel<T> {
       }
       for (int i = 0; i < len; ++i) {
         const int word_idx = sub_index[i];
-        lego_cpu_axpby(emb_size, mlr, top_diff + out_offset * emb_size, 1.0,
+        lego_cpu_axpby(emb_size, mlr, top_diff + out_offset * emb_size, (T)1.0,
                        weights + word_idx * emb_size);
       }
     }
@@ -271,8 +272,8 @@ class MixEmbedGradKernel : public framework::OpKernel<T> {
             sub_j += 1;
             continue;
           }
-          pooling_bp(_pool_type, _max_index, _max_bp_buffer, sum_num, weights,
-                     top_diff, sub_data, top_offset_j, _cap_e, mlr);
+          pooling_bp(context, _pool_type, _max_index, _max_bp_buffer, sum_num,
+                     weights, top_diff, sub_data, top_offset_j, _cap_e, mlr);
           // move to next sub seqs
           top_j++;
           top_offset_j = top_offset[i] + top_j;
@@ -282,8 +283,8 @@ class MixEmbedGradKernel : public framework::OpKernel<T> {
           sub_j = 0;
         }
         // to handle the group at end
-        pooling_bp(_pool_type, _max_index, _max_bp_buffer, sum_num, weights,
-                   top_diff, sub_data, top_offset_j, _cap_e, mlr);
+        pooling_bp(context, _pool_type, _max_index, _max_bp_buffer, sum_num,
+                   weights, top_diff, sub_data, top_offset_j, _cap_e, mlr);
       } else {
         LOG(WARNING) << "zero len sequence " << i << " / "
                      << top_offset.size() - 1;
