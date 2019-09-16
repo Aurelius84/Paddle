@@ -129,10 +129,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       T *top_data = output_t->mutable_data<T>(context.GetPlace());
       memset(top_data, 0, _cap_e * top_l * sizeof(T));
 
-      if (_pool_type == "max") {
-        _max_index->Resize(framework::make_ddim({top_l, _cap_e}));
-      }
-
+      _max_index->Resize(framework::make_ddim({top_l, _cap_e}));
       int *max_index = _max_index->mutable_data<int>(context.GetPlace());
       for (int i = 0; i < offset.size() - 1; ++i) {
         int w = offset[i + 1] - offset[i];
@@ -143,7 +140,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
           _buffer->Resize(framework::make_ddim({1, sum_num, _cap_e}));
-          T *sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
+          int64_t *sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
           int sub_j = 0;
           for (int j = 0; j < w; ++j) {
             unsigned int word_idx =
@@ -242,7 +239,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
       auto mlr = -1.0 * _lr;
       int top_l = top_offset[top_offset.size() - 1];
       _mix_char_offset->Resize(framework::make_ddim({top_l, 1}));
-      int *mix_offset = _mix_char_offset->mutable_data<int>(context.GetPlace());
+      int *mix_offset = _mix_char_offset->mutable_data<size_t>(context.GetPlace());
       // if (_l1_reg > 1e-10) {  // L1
       //   for (int k = 0; k < top_data->numel(); k++) {
       //     T val = top_data[k];
@@ -260,12 +257,12 @@ class MixEmbedKernel : public framework::OpKernel<T> {
         int w = offset[i + 1] - offset[i];
         if (w > 0) {
           int top_j = 0;
-          size_t sum_num = 0;
+          int sum_num = 0;
           // keep sub embedding indices
           unsigned int top_offset_j = top_offset[i] + top_j;
           sum_num = mix_offset[top_offset_j];
           _buffer->Resize(framework::make_ddim({1, sum_num, 1}));
-          T *sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
+          int64_t *sub_data = _buffer->mutable_data<int64_t>(context.GetPlace());
           int sub_j = 0;
 
           for (int j = 0; j < w; ++j) {
