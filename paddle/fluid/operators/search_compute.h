@@ -101,6 +101,7 @@ static const unsigned int SSE_CUT_LEN_MASK = 3U;
 #define _mm_load_px _mm_loadu_ps
 #define _mm_store_px _mm_storeu_ps
 #define _mm_load1_px _mm_load1_ps
+#define _mm_max_px _mm_max_ps
 
 #endif
 
