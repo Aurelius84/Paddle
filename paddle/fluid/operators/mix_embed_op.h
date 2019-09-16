@@ -68,7 +68,7 @@ class MixEmbedKernel : public framework::OpKernel<T> {
         alpha = (T)1.0;
       }
       for (int i = 0; i < len; ++i) {
-        lego_cpu_axpby(emb_size, alpha, in + i * emb_size, 1.0,
+        lego_cpu_axpby(emb_size, alpha, in + i * emb_size, (T)1.0,
                        out + out_offset * emb_size);
       }
     }
@@ -176,14 +176,14 @@ class MixEmbedGradKernel : public framework::OpKernel<T> {
       const framework::ExecutionContext &context, const std::string pool_type,
       const Tensor *_max_index, Tensor *_max_bp_buffer, const int len,
       T *weights, const T *top_diff, const T *sub_index, const int out_offset,
-      const int emb_size, const float mlr) const {
+      const int emb_size, float mlr) const {
     if (pool_type == "max") {
       _max_bp_buffer->Resize(framework::make_ddim({1, len, emb_size}));
       T *diff = _max_bp_buffer->mutable_data<T>(context.GetPlace());
       memset(diff, 0, len * emb_size * sizeof(T));
       const int *max_index = _max_index->data<int>() + out_offset * emb_size;
       for (int i = 0; i < emb_size; ++i) {
-        const int word_idx = sub_index[max_index[i]];
+        // const int word_idx = sub_index[max_index[i]];
         diff[max_index[i] * emb_size + i] = top_diff[out_offset * emb_size + i];
       }
       for (int i = 0; i < len; ++i) {
