@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #include <cmath>
-//#include "naive_gemm.h"
+#include "naive_gemm.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
@@ -196,9 +196,9 @@ class SearchFCOP : public framework::OperatorWithKernel {
 
     ctx->SetOutputDim("Out", framework::make_ddim({-1, out_size}));
     if (ctx->IsRuntime()) {
-      PADDLE_ENFORCE_EQ(w_dims[1], x_dims[1], "wrong shape: w_dims[1] != x_dims[1]");
-    }
-    else {
+      PADDLE_ENFORCE_EQ(w_dims[1], x_dims[1],
+                        "wrong shape: w_dims[1] != x_dims[1]");
+    } else {
       // compile time
     }
   }
@@ -218,8 +218,9 @@ class CPUSearchFCOPKernel : public framework::OpKernel<T> {
 
     int _out = w->dims()[0];  // 100
     int _in = w->dims()[1];   // 228
-    //PADDLE_ENFORCE_EQ(out_size, _out, "out_size should equal to w->dims()[1]");
-    //PADDLE_ENFORCE_EQ(bottom->dims()[1], _in,
+    // PADDLE_ENFORCE_EQ(out_size, _out, "out_size should equal to
+    // w->dims()[1]");
+    // PADDLE_ENFORCE_EQ(bottom->dims()[1], _in,
     //                  "x.dims()[1] should equal to w->dims()[0]");
 
     top->Resize(framework::make_ddim({bottom->dims()[0], out_size}));
@@ -290,13 +291,13 @@ class CPUSearchFCOPGradKernel : public framework::OpKernel<T> {
     auto* weights_diff = d_w->mutable_data<T>(ctx.GetPlace());
 
     auto blas = math::GetBlas<platform::CPUDeviceContext, T>(ctx);
-    //call_gemm(blas, CblasTrans, CblasNoTrans, _in, _out, batch, 1.0f,
+    // call_gemm(blas, CblasTrans, CblasNoTrans, _in, _out, batch, 1.0f,
     //          bottom_data, top_diff, 0.0f, weights_diff);
     call_gemm(blas, CblasTrans, CblasNoTrans, _out, _in, batch, (T)1.0,
-                          top_diff, bottom_data, (T)0.0, weights_diff);
+              top_diff, bottom_data, (T)0.0, weights_diff);
 
-    call_gemm(blas, CblasNoTrans, CblasNoTrans, batch, _in, _out, (T)1.0, top_diff,
-              weights, (T)0.0, bottom_diff);
+    call_gemm(blas, CblasNoTrans, CblasNoTrans, batch, _in, _out, (T)1.0,
+              top_diff, weights, (T)0.0, bottom_diff);
 
     if (true) {
       auto* d_b = ctx.Output<Tensor>(framework::GradVarName("b"));
@@ -323,9 +324,9 @@ REGISTER_OP_CPU_KERNEL(search_fc,
                        ops::CPUSearchFCOPKernel<plt::CPUDeviceContext, float>
                        //     ops::CPUSearchFCOPKernel<plt::CPUDeviceContext,
                        //                                       double>
-);
+                       );
 REGISTER_OP_CPU_KERNEL(
     search_fc_grad, ops::CPUSearchFCOPGradKernel<plt::CPUDeviceContext, float>
     //     ops::CPUSearchFCOPGradKernel<plt::CPUDeviceContext,
     //                                           double>
-);
+    );

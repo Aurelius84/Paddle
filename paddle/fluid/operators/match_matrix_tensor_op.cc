@@ -14,14 +14,14 @@ limitations under the License. */
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-//#include "naive_gemm.h"
+#include "naive_gemm.h"
 
 #include "paddle/fluid/operators/match_matrix_tensor_op.h"
 
 #ifndef WIN32
+#include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/dynload/mklml.h"
-#include "paddle/fluid/operators/math/blas.h"
 
 // To align with Lego
 #ifndef LEGO_USE_FLOAT
@@ -273,15 +273,13 @@ void lego_cpu_gemm(const math::BlasT<DeviceContext, T>& blas,
                    const T* A, const T* B, const T beta, T* C) {
   int lda = (TransA == CblasNoTrans) ? K : M;
   int ldb = (TransB == CblasNoTrans) ? N : K;
-  //#ifdef LEGO_USE_FLOAT
+//#ifdef LEGO_USE_FLOAT
 #ifndef __NAIVE_GEMM__
   blas.GEMM(TransA, TransB, M, N, K, alpha, A, lda, B, ldb, beta, C, N);
 #else
   naive::gemm<T>(true, (TransA == CblasTrans), (TransB == CblasTrans), M, N, K,
                  alpha, A, lda, B, ldb, beta, C, N);
 #endif  // !__NAIVE_GEMM__
-
-
 
   //   platform::dynload::cblas_sgemm(CblasRowMajor, TransA, TransB, M, N, K,
   //   alpha,
@@ -304,7 +302,7 @@ void lego_cpu_gemm_with_lda(const math::BlasT<DeviceContext, T>& blas,
                             const T* B, const T beta, T* C, int lda) {
   //        int lda = (TransA == CblasNoTrans) ? K : M;
   int ldb = (TransB == CblasNoTrans) ? N : K;
-  // #ifdef LEGO_USE_FLOAT
+// #ifdef LEGO_USE_FLOAT
 
 #ifndef __NAIVE_GEMM__
   blas.GEMM(TransA, TransB, M, N, K, alpha, A, lda, B, ldb, beta, C, N);
@@ -312,7 +310,6 @@ void lego_cpu_gemm_with_lda(const math::BlasT<DeviceContext, T>& blas,
   naive::gemm<T>(true, (TransA == CblasTrans), (TransB == CblasTrans), M, N, K,
                  alpha, A, lda, B, ldb, beta, C, N);
 #endif  // !__NAIVE_GEMM__
-
 
   //   platform::dynload::cblas_sgemm(CblasRowMajor, TransA, TransB, M, N, K,
   //   alpha,
@@ -401,77 +398,80 @@ class CPUMatchMatrixTensorOPKernel : public framework::OpKernel<T> {
     //     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K, 1.0,
     //                 bottom_l_data, K, t_data, N, 0.0, bottom_l_trans_data,
     //                 N);
-/*
-if (top_size == 9792)
-{
-    std::ofstream out_to_file("out.model", std::ios::binary);
-    out_to_file.write((char*)bottom_l_trans_data, tmp->dims()[0] * tmp->dims()[1] * sizeof(T));
-    out_to_file.close();
-    std::ofstream out_to_file_r("out.model.bottom_r_data", std::ios::binary);
-    out_to_file_r.write((char*)bottom_r_data, y->dims()[0] * y->dims()[1]*sizeof(float));
-    out_to_file_r.close();
+    /*
+    if (top_size == 9792)
+    {
+        std::ofstream out_to_file("out.model", std::ios::binary);
+        out_to_file.write((char*)bottom_l_trans_data, tmp->dims()[0] *
+    tmp->dims()[1] * sizeof(T));
+        out_to_file.close();
+        std::ofstream out_to_file_r("out.model.bottom_r_data",
+    std::ios::binary);
+        out_to_file_r.write((char*)bottom_r_data, y->dims()[0] *
+    y->dims()[1]*sizeof(float));
+        out_to_file_r.close();
 
-    float * p = new float[9792];
-    Tensor out_tensor;
-    out_tensor.Resize(out->dims());
-    auto* out_tensor_data = out_tensor.mutable_data<T>(ctx.GetPlace());
-    blas.GEMM(CblasNoTrans, CblasTrans, 4, 51, 128, 1.0f, 
-        bottom_l_trans_data,
-        384,
-        bottom_r_data,
-        128,
-        0.0f,
-        out_tensor_data,
-        51);
-        
-    LOG(ERROR) << "check_mkl: p[28] = " << out_tensor_data[28] << " ";
-    LOG(ERROR) << "check_mkl: p[39] = " << out_tensor_data[39] << " ";
-    LOG(ERROR) << "check_mkl: p[49] = " << out_tensor_data[49] << " ";
+        float * p = new float[9792];
+        Tensor out_tensor;
+        out_tensor.Resize(out->dims());
+        auto* out_tensor_data = out_tensor.mutable_data<T>(ctx.GetPlace());
+        blas.GEMM(CblasNoTrans, CblasTrans, 4, 51, 128, 1.0f,
+            bottom_l_trans_data,
+            384,
+            bottom_r_data,
+            128,
+            0.0f,
+            out_tensor_data,
+            51);
 
-    int n;
-    n = memcmp(bottom_r_data + 39*128, bottom_r_data + 49*128, 128 );
-    LOG(ERROR) << "memcmp = " << n;
+        LOG(ERROR) << "check_mkl: p[28] = " << out_tensor_data[28] << " ";
+        LOG(ERROR) << "check_mkl: p[39] = " << out_tensor_data[39] << " ";
+        LOG(ERROR) << "check_mkl: p[49] = " << out_tensor_data[49] << " ";
 
-    float f28 = 0;
-    blas.GEMM(CblasNoTrans, CblasTrans, 1, 1, 128, 1.0f, 
-        bottom_l_trans_data,
-        384,
-        bottom_r_data + 28*128,
-        128,
-        0.0f,
-        &f28,
-        1);
-    LOG(ERROR) << "check_mkl: single f28 = " << f28 << " ";
+        int n;
+        n = memcmp(bottom_r_data + 39*128, bottom_r_data + 49*128, 128 );
+        LOG(ERROR) << "memcmp = " << n;
 
-    float f39 = 0;
-    blas.GEMM(CblasNoTrans, CblasTrans, 1, 1, 128, 1.0f, 
-        bottom_l_trans_data,
-        384,
-        bottom_r_data + 39*128,
-        128,
-        0.0f,
-        &f39,
-        1);
-    LOG(ERROR) << "check_mkl: single f39 = " << f39 << " ";
+        float f28 = 0;
+        blas.GEMM(CblasNoTrans, CblasTrans, 1, 1, 128, 1.0f,
+            bottom_l_trans_data,
+            384,
+            bottom_r_data + 28*128,
+            128,
+            0.0f,
+            &f28,
+            1);
+        LOG(ERROR) << "check_mkl: single f28 = " << f28 << " ";
 
-    float f49 = 0;
-    blas.GEMM(CblasNoTrans, CblasTrans, 1, 1, 128, 1.0f, 
-        bottom_l_trans_data,
-        384,
-        bottom_r_data + 49*128,
-        128,
-        0.0f,
-        &f49,
-        1);
-    LOG(ERROR) << "check_mkl: single f49 = " << f49 << " ";
+        float f39 = 0;
+        blas.GEMM(CblasNoTrans, CblasTrans, 1, 1, 128, 1.0f,
+            bottom_l_trans_data,
+            384,
+            bottom_r_data + 39*128,
+            128,
+            0.0f,
+            &f39,
+            1);
+        LOG(ERROR) << "check_mkl: single f39 = " << f39 << " ";
 
-    for (int tt= 0; tt < 4*51; tt++)
-    {   
-        LOG(ERROR) << p[tt] << " ";
-    }   
-    LOG(ERROR) << "check_end";
-}
-*/
+        float f49 = 0;
+        blas.GEMM(CblasNoTrans, CblasTrans, 1, 1, 128, 1.0f,
+            bottom_l_trans_data,
+            384,
+            bottom_r_data + 49*128,
+            128,
+            0.0f,
+            &f49,
+            1);
+        LOG(ERROR) << "check_mkl: single f49 = " << f49 << " ";
+
+        for (int tt= 0; tt < 4*51; tt++)
+        {
+            LOG(ERROR) << p[tt] << " ";
+        }
+        LOG(ERROR) << "check_end";
+    }
+    */
     for (size_t b = 0; b < x->lod()[0].size() - 1; b++) {
       for (int t = 0; t < dim_t; t++) {
         int len_l = offset_l[b + 1] - offset_l[b];
@@ -521,7 +521,7 @@ if (top_size == 9792)
     out_lod.push_back(top_offset);
     out_lod.push_back(offset_l);
     out_lod.push_back(offset_r);
-    
+
     out->set_lod(out_lod);
 
 #endif
@@ -634,11 +634,11 @@ REGISTER_OP_CPU_KERNEL(
     ops::CPUMatchMatrixTensorOPKernel<paddle::platform::CPUDeviceContext, float>
     //     ops::CPUMatchMatrixTensorOPKernel<paddle::platform::CPUDeviceContext,
     //                                       double>
-);
+    );
 REGISTER_OP_CPU_KERNEL(
     match_matrix_tensor_grad,
     ops::CPUMatchMatrixTensorOPGradKernel<paddle::platform::CPUDeviceContext,
                                           float>
     //     ops::CPUMatchMatrixTensorOPGradKernel<paddle::platform::CPUDeviceContext,
     //                                           double>
-);
+    );

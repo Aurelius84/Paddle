@@ -15,7 +15,7 @@ limitations under the License. */
 #include "paddle/fluid/operators/search_grnn_op.h"
 #include <cmath>
 #ifndef WIN32
-//#include "naive_gemm.h"
+#include "naive_gemm.h"
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/dynload/mklml.h"
@@ -798,10 +798,10 @@ REGISTER_OP_CPU_KERNEL(search_grnn,
                        ops::CPUSearchGrnnOPKernel<plt::CPUDeviceContext, float>
                        //     ops::CPUSearchGrnnOPKernel<plt::CPUDeviceContext,
                        //                                       double>
-);
+                       );
 REGISTER_OP_CPU_KERNEL(
     search_grnn_grad,
     ops::CPUSearchGrnnOPGradKernel<plt::CPUDeviceContext, float>
     //     ops::CPUSearchGrnnOPGradKernel<plt::CPUDeviceContext,
     //                                           double>
-);
+    );

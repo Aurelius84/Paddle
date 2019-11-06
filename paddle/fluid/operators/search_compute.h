@@ -19,10 +19,10 @@ limitations under the License. */
 #include <cmath>    //fabs
 #include <cstring>  // memcpy
 
+#include "naive_gemm.h"
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/dynload/mklml.h"
-//#include "naive_gemm.h"
 
 namespace paddle {
 namespace operators {
@@ -66,9 +66,8 @@ template <typename T>
 void call_gemm_batched(const framework::ExecutionContext& ctx,
                        const CBLAS_TRANSPOSE TransA,
                        const CBLAS_TRANSPOSE TransB, const int M, const int N,
-                       const int K, const T alpha, const T** A,
-                       const T** B, const T beta, T** C,
-                       const int batch) {
+                       const int K, const T alpha, const T** A, const T** B,
+                       const T beta, T** C, const int batch) {
   for (int i = 0; i < batch; ++i) {
     call_gemm(ctx, TransA, TransB, M, N, K, alpha, A[i], B[i], beta, C[i]);
   }
@@ -384,8 +383,8 @@ inline void sse_ip(const T* vec1, const T* vec2, size_t len, T& result) {
         _mm256_mul_px(_mm256_load_px(vec1 + jjj), _mm256_load_px(vec2 + jjj)));
   }
 
-  //    result = mm_result[0]+mm_result[1]+mm_result[2]+mm_result[3]+
-  //      mm_result[4]+mm_result[5]+mm_result[6]+mm_result[7];
+//    result = mm_result[0]+mm_result[1]+mm_result[2]+mm_result[3]+
+//      mm_result[4]+mm_result[5]+mm_result[6]+mm_result[7];
 
 #if defined(LEGO_USE_FLOAT)
   __m256x hsum = _mm256_hadd_px(mm_result, mm_result);

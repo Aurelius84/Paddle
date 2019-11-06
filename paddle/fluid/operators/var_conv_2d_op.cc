@@ -14,7 +14,7 @@ limitations under the License. */
 
 #include "paddle/fluid/operators/var_conv_2d_op.h"
 #ifndef WIN32
-//#include "naive_gemm.h"
+#include "naive_gemm.h"
 #include "paddle/fluid/operators/math/blas.h"
 #include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/platform/dynload/mklml.h"
@@ -435,10 +435,10 @@ class CPUVarConv2dOPGradKernel : public framework::OpKernel<T> {
                 top_diff + top_offset[b], col_data + col_offset[b], 1.0,
                 w_diff);
 #else
-     naive::gemm<T>(false, true, output_channel,
-                   input_channel * kernel_h * kernel_w, top_im_size, 1.0,
-                   top_diff + top_offset[b], col_data + col_offset[b], 1.0,
-                   w_diff);
+      naive::gemm<T>(false, true, output_channel,
+                     input_channel * kernel_h * kernel_w, top_im_size, 1.0,
+                     top_diff + top_offset[b], col_data + col_offset[b], 1.0,
+                     w_diff);
 #endif  // !__NAIVE_GEMM__
 
 #endif
@@ -461,10 +461,10 @@ REGISTER_OP_CPU_KERNEL(var_conv_2d,
                        ops::CPUVarConv2dOPKernel<plt::CPUDeviceContext, float>
                        //     ops::CPUVarConv2dOPKernel<plt::CPUDeviceContext,
                        //                                       double>
-);
+                       );
 REGISTER_OP_CPU_KERNEL(
     var_conv_2d_grad,
     ops::CPUVarConv2dOPGradKernel<plt::CPUDeviceContext, float>
     //     ops::CPUVarConv2dOPGradKernel<plt::CPUDeviceContext,
     //                                           double>
-);
+    );
