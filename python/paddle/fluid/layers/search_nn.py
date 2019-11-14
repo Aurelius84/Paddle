@@ -23,6 +23,7 @@ __all__ = [
     'search_fc',
     'search_seq_fc',
     'search_grnn',
+    'search_seq_arithmetic',
     ]
 
 
@@ -146,3 +147,32 @@ def search_grnn(
     )
 
     return grnn_res
+
+
+def search_seq_arithmetic(
+        input_x,
+        input_y,
+        op_type,
+        name=None):
+    """
+    :param input_x:
+    :param input_y:
+    :param op_type:
+    :param name:
+    :return:
+    """
+    helper = LayerHelper('search_seq_arithmetic', **locals())
+    dtype = input_x.dtype
+
+    res = helper.create_variable_for_type_inference(dtype)
+    helper.append_op(
+        type='search_seq_arithmetic',
+        inputs={
+            'X': input_x,
+            'Y': input_y,
+        },
+        outputs={"Out": res},
+        attrs={'op_type': op_type}
+    )
+
+    return res
