@@ -17,6 +17,8 @@ from __future__ import print_function
 from . import ops
 from .ops import *
 from . import nn
+from . import search_nn
+from .search_nn import *
 from .nn import *
 from . import io
 from .io import *
@@ -42,6 +44,7 @@ from . import rnn
 
 __all__ = []
 __all__ += nn.__all__
+__all__ += search_nn.__all__
 __all__ += io.__all__
 __all__ += tensor.__all__
 __all__ += control_flow.__all__
