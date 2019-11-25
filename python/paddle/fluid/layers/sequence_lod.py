@@ -149,6 +149,7 @@ def sequence_conv(input,
     filter_param = helper.create_parameter(
         attr=helper.param_attr, shape=filter_shape, dtype=dtype)
     pre_bias = helper.create_variable_for_type_inference(dtype)
+    col = helper.create_variable_for_type_inference(dtype)
     if padding_start is None:
         padding_start = -int(filter_size // 2)
 
@@ -158,7 +159,8 @@ def sequence_conv(input,
             'X': [input],
             'Filter': [filter_param],
         },
-        outputs={"Out": pre_bias},
+        outputs={"Out": pre_bias,
+                 "Col": col},
         attrs={
             'contextStride': filter_stride,
             'contextStart': padding_start,

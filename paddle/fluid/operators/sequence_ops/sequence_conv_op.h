@@ -31,6 +31,7 @@ class SequenceConvKernel : public framework::OpKernel<T> {
     auto* in = context.Input<LoDTensor>("X");
     auto* out = context.Output<LoDTensor>("Out");
     auto filter = *context.Input<Tensor>("Filter");
+    auto col = *context.Output<LoDTensor>("Col");
 
     out->mutable_data<T>(context.GetPlace());
 
@@ -56,7 +57,7 @@ class SequenceConvKernel : public framework::OpKernel<T> {
 
     framework::DDim col_shape = {in->dims()[0],
                                  context_length * sequence_width};
-    Tensor col;
+    //    Tensor col;
     col.mutable_data<T>(col_shape, context.GetPlace());
     // Because if padding_trainable is false, padding data should be zeros.
     math::SetConstant<DeviceContext, T> set_zero;
@@ -80,6 +81,7 @@ class SequenceConvGradKernel : public framework::OpKernel<T> {
     auto* in_g = context.Output<LoDTensor>(framework::GradVarName("X"));
     auto* out_g = context.Input<LoDTensor>(framework::GradVarName("Out"));
     auto* filter_g = context.Output<Tensor>(framework::GradVarName("Filter"));
+    //    auto* col_in = context.Input<LoDTensor>("Col");
     auto* padding_data_g =
         context.Output<Tensor>(framework::GradVarName("PaddingData"));
     auto* in = context.Input<LoDTensor>("X");
@@ -105,7 +107,7 @@ class SequenceConvGradKernel : public framework::OpKernel<T> {
     framework::DDim col_shape = {in->dims()[0],
                                  sequence_width * context_length};
     Tensor col;
-
+    //    auto* col = const_cast<LoDTensor*>(col_in);
     if (in_g || filter_g || (padding_trainable && padding_data_g)) {
       col.mutable_data<T>(col_shape, context.GetPlace());
       // Because if padding_trainable is false, padding data should be zeros.
@@ -139,8 +141,8 @@ class SequenceConvGradKernel : public framework::OpKernel<T> {
       filter_g->mutable_data<T>(context.GetPlace());
       set_zero(dev_ctx, filter_g, static_cast<T>(0));
 
-      Tensor filter_grad = *filter_g;
-      LoDTensor out_grad = *out_g;
+      //      Tensor filter_grad = *filter_g;
+      //      LoDTensor out_grad = *out_g;
 
       const Tensor* padding_data = nullptr;
       if (padding_trainable) {
@@ -149,9 +151,9 @@ class SequenceConvGradKernel : public framework::OpKernel<T> {
 
       seq_project_functor(dev_ctx, *in, padding_data, padding_trainable,
                           context_start, context_length, context_stride, up_pad,
-                          down_pad, &col);
+                          down_pad, col);
 
-      blas.MatMul(col, true, out_grad, false, &filter_grad);
+      blas.MatMul(col, true, *out_g, false, filter_g);
     }
   }
 };
