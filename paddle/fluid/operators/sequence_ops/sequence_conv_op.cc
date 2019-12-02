@@ -34,8 +34,6 @@ class SequenceConvOp : public framework::OperatorWithKernel {
                    "Input(Filter) of SequenceConvOp should not be null.");
     PADDLE_ENFORCE(ctx->HasOutput("Out"),
                    "Output(Out) of SequenceConvOp should not be null.");
-    PADDLE_ENFORCE(ctx->HasOutput("Col"),
-                   "Output(Col) of SequenceConvOp should not be null.");
 
     int context_length = ctx->Attrs().Get<int>("contextLength");
     int context_start = ctx->Attrs().Get<int>("contextStart");
@@ -72,9 +70,6 @@ class SequenceConvOp : public framework::OperatorWithKernel {
           "Input(PaddingData)'s shape is not consistent with 'context_start' "
           "and 'context_length'.");
     }
-    framework::DDim col_shape = {in_dims[0], context_length * in_dims[1]};
-    ctx->SetOutputDim("Col", col_shape);
-    ctx->ShareLoD("X", "Col");
 
     in_dims[1] = filter_dims[1];
     ctx->SetOutputDim("Out", in_dims);
@@ -138,7 +133,6 @@ class SequenceConvOpMaker : public framework::OpProtoAndCheckerMaker {
         "variable-time length output sequence. The underlying tensor in "
         "this LoDTensor is a matrix with shape (T, M), where, T is the "
         "total time steps in this mini-batch, M is the output feature size.");
-    AddOutput("Col", "");
 
     AddAttr<bool>("paddingTrainable",
                   "(bool, default:false) the padding data of SequenceConvOp "
@@ -201,7 +195,6 @@ class SequenceConvGradOpMaker : public framework::SingleGradOpMaker<T> {
 
     op->SetInput("X", this->Input("X"));
     op->SetInput("Filter", this->Input("Filter"));
-    //    op->SetInput("Col", this->Output("Col"));
     op->SetInput(framework::GradVarName("Out"), this->OutputGrad("Out"));
 
     op->SetOutput(framework::GradVarName("X"), this->InputGrad("X"));
