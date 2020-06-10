@@ -104,6 +104,11 @@ GetUnusedVars(const BlockDesc &block,
     OpInOutInfo info;
     for (auto &name_pair : op->Inputs()) {
       for (auto &name : name_pair.second) {
+        /*
+         * 此var可以删除，需满足：
+         * 1. 不在skip_vars中
+         * 2. 在block中可以找见，且persistable=False
+         */
         if (!VarCanBeDeleted(name, block, skip_vars)) {
           continue;
         }
@@ -142,12 +147,15 @@ GetUnusedVars(const BlockDesc &block,
   }
   return result;
 }
-
+/*
+ * 在调用op->Run执行完一个op之后，调用此接口，GC掉后续op无用的vars
+ */
 void DeleteUnusedTensors(
     const Scope &scope, const OperatorBase *op,
     const std::unordered_map<const OperatorBase *, std::vector<std::string>>
         &delete_vars_map,
     GarbageCollector *gc) {
+  // step 1: 如果delete_vars_map里不包含此op，则直接跳过，表示此op后无var可GC
   auto iter = delete_vars_map.find(op);
   if (iter == delete_vars_map.end()) {
     return;
@@ -157,6 +165,9 @@ void DeleteUnusedTensors(
 
   std::deque<std::shared_ptr<memory::Allocation>> garbages;
 
+  // 跳过不属于当前scope的var
+  // TODO(src_learn):
+  // 不属于当前scope，表明此Var在外层scope创建，可能在其他block用到
   for (auto &var_name : delete_vars) {
     auto *var = scope.FindVar(var_name);
     if (var == nullptr) {

@@ -26,9 +26,13 @@ void OpProtoAndCheckerMaker::Validate() {
 
 OpProtoAndCheckerMaker::VariableBuilder OpProtoAndCheckerMaker::AddInput(
     const std::string& name, const std::string& comment) {
+  // step 1: 创建一个新的input标记
   auto* input = proto_->add_inputs();
+  // step 2: 设置Maker中传入的name和commet信息
   input->set_name(name);
   input->set_comment(comment);
+  // step 3:
+  // 返回一个VariableBuilder，用于设置Duplicable、Intermediate、Dispensable属性
   return OpProtoAndCheckerMaker::VariableBuilder{input};
 }
 

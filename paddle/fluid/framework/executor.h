@@ -41,7 +41,8 @@ struct ExecutorPrepareContext {
                          bool force_disable_gc = false);
 
   const framework::ProgramDesc& prog_;
-  const size_t block_id_;
+  const size_t
+      block_id_;  // prepare时传入的block_id，如在while_op中，对应while block_id
 
   std::vector<std::unique_ptr<OperatorBase>> ops_;
 

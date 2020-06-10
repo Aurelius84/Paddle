@@ -56,6 +56,7 @@ ExecutorPrepareContext::ExecutorPrepareContext(
 void ExecutorPrepareContext::PrepareUnusedVars(
     const std::vector<std::string>& keep_vars, bool force_disable_gc) {
   // If gc is enabled and block size > 1
+  // 表明program中存在sub_block，即意味着可能存在cond_op/while_op或rnn_op
   if (prog_.Size() > 1) {
     operators::PrepareSafeEagerDeletionOnConditionalOpAndConditionalGradOp(
         prog_, block_id_, ops_);
@@ -64,12 +65,13 @@ void ExecutorPrepareContext::PrepareUnusedVars(
     operators::PrepareSafeEagerDeletionOnRecurrentOpAndRecurrentGradOp(
         prog_, block_id_, ops_);
   }
-
+  // 如果没有达到Eager GC阈值或者disable gc时，则不会解析unused_vars_
   force_disable_gc_ = force_disable_gc;
   if (GetEagerDeletionThreshold() < 0 || force_disable_gc_) {
     return;
   }
-
+  // 解析无用的vars，<OperatorBase*, vector<string>>
+  // 每个op对应的在执行完此op后可以删除的vars name 列表
   unused_vars_ = GetUnusedVars(prog_.Block(block_id_), ops_, keep_vars);
 }
 
@@ -109,28 +111,32 @@ void Executor::CreateVariables(const ProgramDesc& pdesc, Scope* scope,
   VLOG(3) << "Creating Variables for block " << block_id;
   auto& global_block = pdesc.Block(block_id);
   const Scope* ancestor_scope = scope;
+  // step 1: 先回溯找到最顶层的scope
   while (ancestor_scope->parent()) {
     ancestor_scope = ancestor_scope->parent();
   }
+  // 若当前scope不是最顶层的scope
   if (ancestor_scope != scope) {
     for (auto& var : global_block.AllVars()) {
       if (var->Name() == framework::kEmptyVarName) {
         continue;
       }
-
+      // 若var.name不是@EMPTY@，且属于可持久化的类型
       if (var->Persistable()) {
         auto* ptr = const_cast<Scope*>(ancestor_scope)->Var(var->Name());
+        // mutable此var
         InitializeVariable(ptr, var->GetType());
         VLOG(3) << "Create Variable " << var->Name()
                 << " global, which pointer is " << ptr;
-      } else {
+      } else {  // TODO(src_learn):
+                // 是否Persistable会决定从哪个scope中查找此var？
         auto* ptr = scope->Var(var->Name());
         InitializeVariable(ptr, var->GetType());
         VLOG(3) << "Create Variable " << var->Name()
                 << " locally, which pointer is " << ptr;
       }
     }
-  } else {
+  } else {  // 若当前scope就是最顶层的scope
     for (auto& var : global_block.AllVars()) {
       auto* ptr = scope->Var(var->Name());
       InitializeVariable(ptr, var->GetType());
@@ -387,10 +393,13 @@ std::unique_ptr<ExecutorPrepareContext> Executor::Prepare(
                         "Input block id = %d, but it should be less than "
                         "program.size() which is %d",
                         static_cast<size_t>(block_id), program.Size()));
+  // step 1: 获取block_id对应的block
   auto& block = program.Block(block_id);
+  // step 2: 根据此block中的所有OpDesc，创建Operator
   for (auto& op_desc : block.AllOps()) {
     ctx->ops_.push_back(OpRegistry::CreateOp(*op_desc));
   }
+  // step 3:
   ctx->PrepareUnusedVars(skip_ref_cnt_vars, force_disable_gc);
   return ctx;
 }
@@ -442,6 +451,8 @@ void Executor::RunPartialPreparedContext(ExecutorPrepareContext* ctx,
     if (create_local_scope) {
       local_scope = &scope->NewScope();
     }
+    // 遍历block_id_中的所有vars，对于persistable=True的var，在顶层scope创建
+    // 否则直接在local_scope里创建
     CreateVariables(ctx->prog_, local_scope, ctx->block_id_);
   }
 
@@ -465,17 +476,18 @@ void Executor::RunPartialPreparedContext(ExecutorPrepareContext* ctx,
     }
 #endif
   }
-
+  // 依次执行所有的ops
   for (int64_t i = start_op_index; i < end_op_index; ++i) {
     auto& op = ctx->ops_[i];
     op->Run(*local_scope, place_);
     if (gc) {
+      // GC掉此op对应的无用vars
       DeleteUnusedTensors(*local_scope, op.get(), ctx->unused_vars_, gc.get());
     }
   }
 
   platform::DeviceContextPool::Instance().Get(place_)->Wait();
-
+  // 如果创建了子scope，则从scope中删除local_scope
   if (local_scope != scope) {
     scope->DeleteScope(local_scope);
   } else {

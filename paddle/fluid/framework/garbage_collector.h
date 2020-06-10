@@ -25,6 +25,9 @@
 namespace paddle {
 namespace framework {
 
+/*
+ * 垃圾回收的抽象基类
+ */
 class GarbageCollector {
  public:
   using GarbageQueue = std::deque<std::shared_ptr<memory::Allocation>>;

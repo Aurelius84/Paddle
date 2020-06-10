@@ -21,8 +21,13 @@ limitations under the License. */
 namespace paddle {
 namespace framework {
 template <typename T>
+/*
+ * 运行时从Tensor中获取持有的数据
+ */
 inline const T* Tensor::data() const {
+  // step 1: 检查holder_是否初始化，以及数据内存长度是否符合预期
   check_memory_size();
+  // step 2: 检查获取的数据类型T与实际保存的类型(或字节长度)是否一致
   bool valid =
       std::is_same<T, void>::value || type_ == DataTypeTrait<T>::DataType();
   PADDLE_ENFORCE_EQ(
@@ -31,9 +36,9 @@ inline const T* Tensor::data() const {
           "Tensor holds the wrong type, it holds %s, but desires to be %s.",
           DataTypeToString(type_),
           DataTypeToString(DataTypeTrait<T>::DataType())));
-
+  // step 3: cast转换为类型T返回
   return reinterpret_cast<const T*>(
-      reinterpret_cast<uintptr_t>(holder_->ptr()) + offset_);
+      reinterpret_cast<uintptr_t>(holder_->ptr()) + offset_);  // 内存连续
 }
 
 inline bool Tensor::IsInitialized() const { return holder_ != nullptr; }

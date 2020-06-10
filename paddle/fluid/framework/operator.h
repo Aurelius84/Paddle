@@ -130,6 +130,14 @@ class RuntimeContext {
  * should always construct a proto message OpDesc and call
  * OpRegistry::CreateOp(op_desc) to get an Operator instance.
  */
+
+/*
+ * 1. OperatorBase 包含了执行一个Op的基本要素，如type/inputs/outputs/attrs.
+ * 2.
+ * 用户应通过构造OpRegistry::CreateOp(op_desc)的方式创建一个OperatorBase，不建议直接调用构造函数创建对象(why?
+ * 封装？)
+ *
+ */
 class OperatorBase {
  public:
   OperatorBase(const std::string& type, const VariableNameMap& inputs,
@@ -139,6 +147,9 @@ class OperatorBase {
 
   /// Executor will call this interface function to Run an op.
   //  The implementation should be written at RunImpl
+
+  // 执行一个op的入口函数，具体实现逻辑在RunImpl中
+  // 暴露固定接口，RunImpl为纯虚函数，要求继承此类必须实现此方法
   void Run(const Scope& scope, const platform::Place& place);
 
   // FIXME(typhoonzero): this is only used for recv_op to stop event_loop.

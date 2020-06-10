@@ -39,6 +39,15 @@ static std::string GetSkipEagerDeletionVarsDebugString(
 }
 }  // NOLINT
 
+/*
+ * While_op继承自OperatorBase：
+ *   1.
+ * 包含Kernel的Op需继承OperatorWithKernel，这类Op的功能实现与Input的dtype/layout/place，以及Op调用的第三方库有关。
+ *   2.
+ * 不包含Kernel的Op继承OperatorBase，这类Op的功能实现与设备以及输入的数据不相关。
+ *   3.
+ * OperatorWithKernel是OperatorBase的派生类，必须实现RunImpl函数（基类里是纯虚函数）
+ */
 class WhileOp : public framework::OperatorBase {
  public:
   WhileOp(const std::string &type, const framework::VariableNameMap &inputs,
@@ -49,10 +58,11 @@ class WhileOp : public framework::OperatorBase {
  private:
   void RunImpl(const framework::Scope &scope,
                const platform::Place &dev_place) const override {
+    // while_op的Condition输入是必须的，跳出block的触发条件
     PADDLE_ENFORCE_NOT_NULL(scope.FindVar(Input(kCondition)),
                             platform::errors::NotFound(
                                 "Input(Condition) of WhileOp is not found."));
-
+    // Condition var是shape为[1]的LoDTensor
     auto &cond = scope.FindVar(Input(kCondition))->Get<LoDTensor>();
     PADDLE_ENFORCE_EQ(
         cond.dims(), paddle::framework::make_ddim({1}),
@@ -60,15 +70,18 @@ class WhileOp : public framework::OperatorBase {
             "The shape of Input(Condition) of WhileOp must be 1. But now "
             "the Condition's shape is ",
             cond.dims().to_str(), ".\n"));
-
+    // step 1: 创建exe，获取sub_block里的Program
     framework::Executor executor(dev_place);
     auto *block = Attr<framework::BlockDesc *>(kStepBlock);
 
     auto *program = block->Program();
-
+    // step 2:
+    // 获取StepScopeVar（scope的vector），每个scope用于保存对应step下的vars
     auto step_scopes =
         scope.FindVar(Output(kStepScopes))->GetMutable<StepScopeVar>();
 
+    // 若在执行前向时，step_scopes非空，则从scope里删除相关step_scope，并清空step_scopes.
+    // TODO(src_learn): 为了清除RNN中上个step产生的残余数据？
     if (step_scopes->size() > 0) {
       platform::DeviceContextPool::Instance().Get(dev_place)->Wait();
       for (auto &s : *step_scopes) {
@@ -82,15 +95,18 @@ class WhileOp : public framework::OperatorBase {
     PADDLE_ENFORCE_EQ(step_scopes->size(), 0,
                       platform::errors::PreconditionNotMet(
                           "The Output(StepScope) of WhileOp should be empty."));
-
+    // 获取cond数据，如果cond是GPU Tensor，则会copy到cpu上
     bool cond_data = GetCondData(cond);
     bool is_test = Attr<bool>("is_test");
+    // 跳过Eager GC的 vars 列表
     auto &skip_vars = Attr<std::vector<std::string>>(kSkipEagerDeletionVars);
     VLOG(2) << GetSkipEagerDeletionVarsDebugString(skip_vars);
 
     auto ctx = executor.Prepare(*program, block->ID(), skip_vars);
+    // step 3: 执行while循环
     if (!is_test) {
       while (cond_data) {
+        // 1. 每次都会在scope里创建一个新的子scope，append到step_scopes
         auto &current_scope = scope.NewScope();
         step_scopes->push_back(&current_scope);
         executor.RunPreparedContext(ctx.get(), &current_scope, false, true,
@@ -100,6 +116,7 @@ class WhileOp : public framework::OperatorBase {
       }
     } else {
       auto &current_scope = scope.NewScope();
+      // 显式调用exe接口，创建必要的vars
       executor.CreateVariables(*program, &current_scope, block->ID());
       while (cond_data) {
         for (auto &name : current_scope.LocalVarNames()) {
@@ -115,6 +132,7 @@ class WhileOp : public framework::OperatorBase {
             t->clear();
           }
         }
+        // 设置create_vars和keep_kids为false
         executor.RunPreparedContext(ctx.get(), &current_scope, false, false,
                                     false);
         cond_data =
@@ -232,6 +250,8 @@ class WhileGradOp : public framework::OperatorBase {
           VLOG(8) << outside_og_name << " size = " << outside_array->size();
 
           for (size_t j = 0; j < inside_array.size(); ++j) {
+            // TODO(src_learn): 如果外部的array[j]没有被初始化，将其shpe
+            // resize为{0}，why？
             if (!outside_array->at(j).IsInitialized()) {
               outside_array->at(j).Resize({0});
             }
@@ -269,6 +289,7 @@ class WhileGradOp : public framework::OperatorBase {
                             "the number of names in Inputs(X) is %d.",
                             pg_ig_names.size(), p_names.size()));
       for (size_t param_id = 0; param_id < pg_ig_names.size(); ++param_id) {
+        // 跳过梯度为空的var
         if (pg_ig_names[param_id] == framework::kEmptyVarName) {
           continue;  // parameter doesn't have gradient
         }
@@ -285,6 +306,7 @@ class WhileGradOp : public framework::OperatorBase {
           auto pg_ig_lod_t_arr =
               pg_ig_var->GetMutable<framework::LoDTensorArray>();
           bool empty = true;
+          // 只要pg_ig_var中存在元素个数不为0的tensor
           for (auto &each : *pg_ig_lod_t_arr) {
             if (each.numel() != 0) {
               empty = false;
@@ -320,7 +342,9 @@ class WhileGradOp : public framework::OperatorBase {
                         "Currently the type of var only can be LoDTensorArray, "
                         "or LoDTensor, but the received var[%s] is %s.",
                         inside_grad_name, framework::ToTypeName(var->Type())));
-
+          // zero gradient操作只对LoDTensor的var生效了
+          // TODO(src_learn):
+          // 前面对LoDTensorArray也做了判断，这里为什么不对其进行zero gradient
           if (var->IsType<LoDTensor>()) {
             auto &inside_tensor = var->Get<framework::LoDTensor>();
             framework::AttributeMap attrs;
@@ -328,7 +352,10 @@ class WhileGradOp : public framework::OperatorBase {
             attrs["shape"] = framework::vectorize<int>(inside_tensor.dims());
             attrs["value"] = 0.0f;
 
+            // var_name为while对应的输出var的grad name
             auto var_name = pg_ig_names[param_id];
+            // 创建一个fill_constant_op，初始化此inside_tensor的grad值为0
+            // 因为后续会对每一个step计算出来的梯度进行求和累加
             auto zero_op = framework::OpRegistry::CreateOp(
                 "fill_constant", framework::VariableNameMap{},
                 {{"Out", {var_name}}}, attrs);
@@ -338,12 +365,14 @@ class WhileGradOp : public framework::OperatorBase {
                 ->set_lod(inside_tensor.lod());
           }
         }
+        // inside_grad_name为while内部对应的var的grad name
         auto new_inside_name = cur_scope.Rename(inside_grad_name);
         auto sum_op = framework::OpRegistry::CreateOp(
             "sum", {{"X", {pg_ig_names[param_id], new_inside_name}}},
             {{"Out", {pg_ig_names[param_id]}}},
             framework::AttributeMap{{"use_mkldnn", {false}}});
         sum_op->Run(cur_scope, dev_place);
+        // 重命名回来，可能其他地方会需要？
         cur_scope.Rename(new_inside_name, inside_grad_name);
       }
       dev_ctx.Wait();

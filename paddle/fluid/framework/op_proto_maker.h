@@ -62,6 +62,7 @@ class OpProtoAndCheckerMaker {
   struct VariableBuilder {
     proto::OpProto::Var *var_;
 
+    // TODO(src_learn): 标记Maker中此var是类似list(tensor)/tuple(tensor)?
     VariableBuilder &AsDuplicable() {
       var_->set_duplicable(true);
       return *this;
@@ -71,7 +72,7 @@ class OpProtoAndCheckerMaker {
       var_->set_intermediate(true);
       return *this;
     }
-
+    // 用于标记Maker中一个var是可有可无的
     VariableBuilder &AsDispensable() {
       var_->set_dispensable(true);
       return *this;
@@ -101,7 +102,7 @@ class OpProtoAndCheckerMaker {
   void CheckNoDuplicatedInOutAttrs();
   void Validate();
 
-  proto::OpProto *proto_;
+  proto::OpProto *proto_;  // 保存Op的inputs/outputs/attrs的相关信息
   OpAttrChecker *op_checker_;
   bool validated_{false};
 };
