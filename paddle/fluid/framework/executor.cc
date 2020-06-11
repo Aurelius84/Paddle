@@ -117,20 +117,25 @@ void Executor::CreateVariables(const ProgramDesc& pdesc, Scope* scope,
   }
   // 若当前scope不是最顶层的scope
   if (ancestor_scope != scope) {
+    /*
+     * 这里只会遍历block_id中的所有vars。
+     * TODO(FIXME):在while_op中，step_scope不会hold父block中var状态值
+     * 因此，在while_grad_op中，每次取父block的var值时，用的都是最后step状态值
+     */
     for (auto& var : global_block.AllVars()) {
       if (var->Name() == framework::kEmptyVarName) {
         continue;
       }
-      // 若var.name不是@EMPTY@，且属于可持久化的类型
+      // 若var.name不是@EMPTY@，且属于可持久化的类型， 则在block 0 创建此var
       if (var->Persistable()) {
         auto* ptr = const_cast<Scope*>(ancestor_scope)->Var(var->Name());
         // mutable此var
         InitializeVariable(ptr, var->GetType());
         VLOG(3) << "Create Variable " << var->Name()
                 << " global, which pointer is " << ptr;
-      } else {  // TODO(src_learn):
-                // 是否Persistable会决定从哪个scope中查找此var？
-        auto* ptr = scope->Var(var->Name());
+      } else {  // 若不是一个persistable的var，则直接在当前block的scope创建var
+        auto* ptr = scope->Var(
+            var->Name());  // 对于while的每个step，都会传入一个空的step scope.
         InitializeVariable(ptr, var->GetType());
         VLOG(3) << "Create Variable " << var->Name()
                 << " locally, which pointer is " << ptr;
