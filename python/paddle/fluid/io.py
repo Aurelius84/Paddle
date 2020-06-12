@@ -317,7 +317,9 @@ def save_vars(executor,
                 "no variable in your model, please ensure there are any variables in your model to save"
             )
             return None
-
+        # 创建一个program用来执行save相关的op
+        # 所有的原始main_program里的var都会在save_program里创建一份copy
+        # TODO(src_learn): 这里是通过什么机制进行两个program的同名var的数据同步的呢？
         save_program = Program()
         save_block = save_program.global_block()
 
@@ -1186,6 +1188,7 @@ def save_inference_model(dirname,
             # "./infer_model".
 
     """
+    # 这里为什么用string类型的feed_var_names，而下面的targets却用的Variable类型
     if isinstance(feeded_var_names, six.string_types):
         feeded_var_names = [feeded_var_names]
     elif export_for_deployment:
@@ -1209,6 +1212,7 @@ def save_inference_model(dirname,
     all_ops = main_program.global_block().ops
     for op in all_ops:
         # clear device of Op
+        # 清除了设备信息，是为了后续部署时能够自适应？不会与训练时的设备信息耦合?
         device_attr_name = core.op_proto_and_checker_maker.kOpDeviceAttrName()
         op._set_attr(device_attr_name, "")
         if op.type == 'auc':
@@ -1258,6 +1262,7 @@ def save_inference_model(dirname,
         need_to_remove_op_index = []
         for i, op in enumerate(global_block.ops):
             op.desc.set_is_target(False)
+            # 裁剪掉feed和fetch相关的op
             if op.type == "feed" or op.type == "fetch":
                 need_to_remove_op_index.append(i)
 
