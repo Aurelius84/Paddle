@@ -138,6 +138,7 @@ class Executor {
   const platform::Place GetPlace() const { return place_; }
 
  private:
+  // place info.
   const platform::Place place_;
 };
 
