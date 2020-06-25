@@ -194,7 +194,7 @@ class SingleGradOpMaker<OpDesc> : public GradOpDescMakerBase {
  public:
   using GradOpDescMakerBase::GradOpDescMakerBase;
 
-  std::vector<std::unique_ptr<OpDesc>> operator()() const final {
+  std::vector<std::unique_ptr<OpDesc>> operator()() const final { // 实现了基类的此纯虚函数
     std::vector<std::unique_ptr<OpDesc>> retv;
     retv.emplace_back(new OpDesc());
     try {
@@ -209,7 +209,7 @@ class SingleGradOpMaker<OpDesc> : public GradOpDescMakerBase {
   }
 
  protected:
-  virtual void Apply(GradOpPtr<OpDesc> op) const = 0;
+  virtual void Apply(GradOpPtr<OpDesc> op) const = 0;  // 派生类必须实现apply方法，以创建gra_op
 };
 
 template <>

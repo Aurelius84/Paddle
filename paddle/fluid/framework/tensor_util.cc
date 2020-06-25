@@ -50,11 +50,13 @@ void TensorCopy(const Tensor& src, const platform::Place& dst_place,
 
   auto size = src.numel() * SizeOfType(src.type());
 
+  // 如果src和dst都是cpu上数据，则调用memory::copy
   if (platform::is_cpu_place(src_place) && platform::is_cpu_place(dst_place)) {
     memory::Copy(BOOST_GET_CONST(platform::CPUPlace, dst_place), dst_ptr,
                  BOOST_GET_CONST(platform::CPUPlace, src_place), src_ptr, size);
   }
 #ifdef PADDLE_WITH_CUDA
+  // 从CPU往GPU上copy数据
   else if (platform::is_gpu_place(src_place) &&  // NOLINT
            platform::is_cpu_place(dst_place)) {
     auto src_gpu_place = BOOST_GET_CONST(platform::CUDAPlace, src_place);
@@ -63,6 +65,7 @@ void TensorCopy(const Tensor& src, const platform::Place& dst_place,
     PADDLE_ENFORCE_EQ(platform::is_gpu_place(ctx_place), true);
     auto ctx_gpu_place = BOOST_GET_CONST(platform::CUDAPlace, ctx_place);
     PADDLE_ENFORCE_EQ(src_gpu_place, ctx_gpu_place);
+    // 需要获取GPU的stream
     auto stream =
         reinterpret_cast<const platform::CUDADeviceContext&>(ctx).stream();
     memory::Copy(dst_cpu_place, dst_ptr, src_gpu_place, src_ptr, size, stream);

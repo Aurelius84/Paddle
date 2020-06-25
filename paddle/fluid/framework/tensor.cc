@@ -21,6 +21,7 @@ extern size_t SizeOfType(proto::VarType::Type type);
 void Tensor::check_memory_size() const {
   PADDLE_ENFORCE_NOT_NULL(
       holder_, "Tensor holds no memory. Call Tensor::mutable_data first.");
+  // 这里是用的<=来判断，是因为有存在内存对齐，比如AligenAllocator
   PADDLE_ENFORCE_LE(
       numel() * SizeOfType(type()), memory_size(),
       "Tensor's dims_ is out of bound. Call Tensor::mutable_data "
@@ -34,6 +35,8 @@ size_t Tensor::memory_size() const {
   return holder_ == nullptr ? 0UL : holder_->size() - offset_;
 }
 
+// 给tensor申请内存，注意这里返回的void *
+// 另外这里的底层数据类型需要满足POD，这样通过reinterpret_cast才不会有问题
 void* Tensor::mutable_data(const platform::Place& place,
                            proto::VarType::Type type, size_t requested_size) {
   type_ = type;
@@ -53,7 +56,7 @@ void* Tensor::mutable_data(const platform::Place& place,
       holder_->size() < size + offset_) {
     // Reset holder first before re-allocate to save memory
     holder_.reset();
-    holder_ = memory::AllocShared(place, size);
+    holder_ = memory::AllocShared(place, size); // 返回的是shared_ptr
     offset_ = 0;
   }
   return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(holder_->ptr()) +
@@ -73,6 +76,11 @@ Tensor& Tensor::ShareDataWith(const Tensor& src) {
   return *this;
 }
 
+/*
+ * slice操作，只会更改一个tensor的dims_信息，
+ * 底层共享了同一个shared_ptr holder_
+ * 疑问：slice后的Tensor指向了和原始数据同一片内存地址？
+ */
 Tensor Tensor::Slice(int64_t begin_idx, int64_t end_idx) const {
   check_memory_size();
   PADDLE_ENFORCE_GE(begin_idx, 0,

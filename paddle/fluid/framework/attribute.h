@@ -28,14 +28,15 @@ namespace paddle {
 namespace framework {
 
 template <typename T>
-struct ExtractAttribute {
+struct ExtractAttribute { // 获取Attribute的值
   explicit ExtractAttribute(const std::string& attr_name)
-      : attr_name_(attr_name) {}
+      : attr_name_(attr_name) {} // explicit表示不允许隐式转换
 
-  T* operator()(Attribute& attr) const {
+  // 此处返回的是对象指针
+  T* operator()(Attribute& attr) const { // Attribute 是一个boost::variant类型，即multi-type, single-value
     T* attr_value = nullptr;
     try {
-      attr_value = &boost::get<T>(attr);
+      attr_value = &boost::get<T>(attr); // 取值符获取对象指针
     } catch (boost::bad_get& bad_get) {
       PADDLE_THROW("Cannot get attribute %s by type %s, its type is %s",
                    attr_name_, paddle::platform::demangle(typeid(T).name()),
@@ -54,11 +55,12 @@ struct ExtractAttribute {
 //
 // FIX ME anytime if there is a better solution.
 template <>
-struct ExtractAttribute<bool> {
+struct ExtractAttribute<bool> { // 模板特化，优先级高于模板函数
   explicit ExtractAttribute(const std::string& attr_name)
       : attr_name_(attr_name) {}
 
   bool* operator()(Attribute& attr) const {
+      // 先判断并转变修改原始attr的类型
     if (attr.type() == typeid(int)) {  // NOLINT
       int val = BOOST_GET_CONST(int, attr);
       attr = static_cast<bool>(val);
@@ -183,7 +185,7 @@ class AttrReader {
   }
 
  private:
-  const AttributeMap& attrs_;
+  const AttributeMap& attrs_; // unodered_map<string, Attribute>
 };
 
 // check whether a value(attribute) fit a certain limit
@@ -316,6 +318,7 @@ class TypedAttrChecker {
     it = attr_map->find(attr_name_);
     ExtractAttribute<T> extract_attr(attr_name_);
     T* attr_value = extract_attr(it->second);
+    // 执行所有的value_checker 函数
     for (const auto& checker : value_checkers_) {
       checker(*attr_value);
     }
@@ -342,6 +345,7 @@ class OpAttrChecker {
   void Check(AttributeMap* attr_map, bool explicit_only = false) const {
     auto checker_num = attr_checkers_.size();
     if (explicit_only) checker_num = explicit_checker_num_;
+    //执行op中属性中的所有attr_check.
     for (size_t i = 0; i < checker_num; ++i) {
       attr_checkers_[i](attr_map, false);
     }

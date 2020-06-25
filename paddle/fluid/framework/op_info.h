@@ -34,7 +34,7 @@ class InferShapeBase {
 };
 
 class OpInfo {
- public:
+ public: // 所有的成员变量都是public
   OpCreator creator_;
   GradOpMakerFN grad_op_maker_;
   proto::OpProto* proto_{nullptr};
@@ -61,7 +61,7 @@ class OpInfo {
     PADDLE_ENFORCE_NOT_NULL(
         proto_,
         platform::errors::NotFound("Operator's Proto has not been registered"));
-    PADDLE_ENFORCE_EQ(proto_->IsInitialized(), true,
+    PADDLE_ENFORCE_EQ(proto_->IsInitialized(), true,  // TODO: proto_如何初始化的？需要初始化什么？
                       platform::errors::InvalidArgument(
                           "Operator's Proto in op info is not initialized."));
     return *proto_;
@@ -123,7 +123,7 @@ class OpInfo {
 
 class OpInfoMap {
  public:
-  static OpInfoMap& Instance();
+  static OpInfoMap& Instance(); // 静态成员方法，获取全局类实例
 
   bool Has(const std::string& op_type) const {
     return map_.find(op_type) != map_.end();
@@ -157,10 +157,21 @@ class OpInfoMap {
   std::vector<std::string> GetUseDefaultGradOpDescMakerOps() const;
 
  private:
-  OpInfoMap() = default;
-  std::unordered_map<std::string, OpInfo> map_;
+  OpInfoMap() = default;  // 注意这里的默认构造函数声明为了private
+  std::unordered_map<std::string, OpInfo> map_;  // 保存框架中所有的op信息
 
-  DISABLE_COPY_AND_ASSIGN(OpInfoMap);
+  /*
+   * 1. 通常赋值操作符也是通过copy构造函数实现的（copy-and-swap技术）
+   * 2. C++11之前对象必须有正常的copy语义才能放入容器之中，禁用拷贝构造的对象无法直接放入容器（可以用指针，但引入了指针管理问题）
+   * 3. C++11存在移动语义，你可以通过移动而非拷贝将其放入容器中
+   */
+  DISABLE_COPY_AND_ASSIGN(OpInfoMap);  // 禁用赋值、复制构造
+  /*
+   * classname (const classname&) = delete; // 复制构造
+   * classname (classname&&) = delete;
+   * classname &operator=(const classname&) = delete; // 赋值构造
+   * classname &operator=(classname&&) = delete;
+   */
 };
 
 }  // namespace framework

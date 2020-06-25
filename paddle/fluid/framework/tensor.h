@@ -32,7 +32,7 @@ namespace paddle {
 
 namespace framework {
 
-class LoDTensor;
+class LoDTensor; // 声明LoDTensor
 
 class Tensor {
 #ifdef PADDLE_WITH_MKLDNN
@@ -59,26 +59,26 @@ class Tensor {
 
  public:
   template <typename T, size_t D, int MajorType, typename IndexType>
-  friend struct EigenTensor;
+  friend struct EigenTensor;  // 友元类
 
   template <typename T, int MajorType, typename IndexType>
-  friend struct EigenMatrix;
+  friend struct EigenMatrix;  // 友元类
 
   template <typename T, int MajorType, typename IndexType>
-  friend struct EigenVector;
+  friend struct EigenVector;  // 友元类
 
  public:
-  Tensor() : type_(proto::VarType::FP32), offset_(0) {}
+  Tensor() : type_(proto::VarType::FP32), offset_(0) {} // 默认是float32类型
 
   explicit Tensor(const proto::VarType::Type&);
 
   /*! Return a pointer to mutable memory block. */
   template <typename T>
-  T* data();
+  T* data();  // 非const对象调用tensor.data()可以获得mutable指针
 
   /*! Return a pointer to constant memory block. */
   template <typename T>
-  const T* data() const;
+  const T* data() const;  // const对象调用tensor.data()获得是const指针
 
   inline bool IsInitialized() const;
 
@@ -89,6 +89,7 @@ class Tensor {
   template <typename T>
   T* mutable_data(const platform::Place& place, size_t requested_size = 0);
 
+  // 具体实现，其他同名函数都会调此函数
   void* mutable_data(const platform::Place& place, proto::VarType::Type type,
                      size_t requested_size = 0);
 
@@ -114,10 +115,10 @@ class Tensor {
   int64_t numel() const;
 
   /*! Resize the dimensions of the memory block. */
-  Tensor& Resize(const DDim& dims);
+  Tensor& Resize(const DDim& dims); // 返回引用，实现会返回*this指针，即自身
 
   /*! The internal of two tensors share the same memory block. */
-  Tensor& ShareDataWith(const Tensor& src);
+  Tensor& ShareDataWith(const Tensor& src);  // 直接将*this=src
 
   /**
    * @brief  Return a sub-tensor of the given tensor.
@@ -150,6 +151,7 @@ class Tensor {
 
   void set_layout(const DataLayout layout) { layout_ = layout; }
 
+  // clear会清空申请的内容，shared_ptr的引用计数减一
   void clear() {
     holder_ = nullptr;
     offset_ = 0;

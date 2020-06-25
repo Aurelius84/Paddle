@@ -59,15 +59,15 @@ class DDim {
  public:
   constexpr static int kMaxRank = 9;
 
-  DDim() : rank_(1) { dim_[0] = 0; }
+  DDim() : rank_(1) { dim_[0] = 0; } // 默认初始化为{0}
 
-  DDim(const DDim& ddim) : dim_() { CopyFrom(ddim); }
+  DDim(const DDim& ddim) : dim_() { CopyFrom(ddim); } // 复制构造
 
-  DDim(const int* d, int n) : rank_(n) {
+  DDim(const int* d, int n) : rank_(n) { // int类型
     dynamic_dim_assign(d, dim_.GetMutable(), n);
   }
 
-  DDim(const int64_t* d, int n) : rank_(n) {
+  DDim(const int64_t* d, int n) : rank_(n) { // int64_t 类型
     dynamic_dim_assign(d, dim_.GetMutable(), n);
   }
 
@@ -153,7 +153,7 @@ class DDim {
   friend DDim stride_numel(const DDim& ddim);
 
  private:
-  Dim<kMaxRank> dim_;
+  Dim<kMaxRank> dim_; // 底层是int64_t 类型
   int rank_;
 };
 

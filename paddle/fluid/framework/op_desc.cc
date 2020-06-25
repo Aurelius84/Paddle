@@ -337,6 +337,7 @@ proto::OpDesc *OpDesc::Proto() {
   return &desc_;
 }
 
+// 这里的每个input对应的为什么是个vector<string>?
 const std::vector<std::string> &OpDesc::Input(const std::string &name) const {
   auto it = inputs_.find(name);
   PADDLE_ENFORCE(it != inputs_.end(), "Input %s cannot be found in Op %s", name,
@@ -570,6 +571,12 @@ void OpDesc::RenameOutput(const std::string &old_name,
 
   need_update_ = true;
 }
+
+/*
+ * 对一个opdesc的input进行重命名，需要涉及：
+ * 1. 对此input中的vector<string>均进行替换
+ * 2. 对attrs_中的op_role_var的所有op_var进行替换
+ */
 
 void OpDesc::RenameInput(const std::string &old_name,
                          const std::string &new_name) {

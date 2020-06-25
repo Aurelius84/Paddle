@@ -44,13 +44,14 @@ inline const T* Tensor::data() const {
 inline bool Tensor::IsInitialized() const { return holder_ != nullptr; }
 
 template <typename T>
-inline T* Tensor::data() {
+inline T* Tensor::data() { // 声明为内联函数
   check_memory_size();
   bool valid =
       std::is_same<T, void>::value || type_ == DataTypeTrait<T>::DataType();
   PADDLE_ENFORCE(
       valid, "Tensor holds the wrong type, it holds %s, but desires to be %s",
       DataTypeToString(type_), DataTypeToString(DataTypeTrait<T>::DataType()));
+  //重解释转换，是一种将数据以二进制的形式进行重新解释的操作。
   return reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(holder_->ptr()) +
                               offset_);
 }

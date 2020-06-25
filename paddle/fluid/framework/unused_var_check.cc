@@ -60,7 +60,21 @@ const std::unordered_set<std::string> op_has_unsed_vars_white_list = {
 
 namespace paddle {
 namespace framework {
-
+/*
+ * thread_local是C++ 11的新特性，会影响变量的存储周期。C++中的四种存储周期：
+ *  1. automic
+ *  2. static
+ *  3. dynamic
+ *  4. thread_local:
+ *    1）只有它具有线程周期，这些变量在线程开始时被生成(allocated),在线程结束时被销毁(deallocated)
+ *    2) 每一个线程都拥有一个独立的变量实例
+ *    3) 其在线程中是持续存在的，具有类似static一样的生命周期
+ *
+ *  哪些变量可以声明为thread_local?
+ *    1) 命名空间下的全局变量
+ *    2) 类的static成员变量
+ *    3) 本地变量
+ */
 std::unordered_set<std::string> *GetThreadLocalUsedVarNameSet() {
   thread_local std::unordered_set<std::string> used_var_name_set;
   return &used_var_name_set;
@@ -75,9 +89,12 @@ void LogVarUsageIfUnusedVarCheckEnabled(const std::string &name) {
 
 void CheckUnusedVar(const OperatorBase &op, const Scope &scope) {
   // skip op in white list and it should be fixed in the future.
+  // 如果这个op在不需要解析无用var的白名单里，则直接跳过。
+  // 主要是一些类似batch_norm/data_norm的op，因为这类op会有训练中间状态vars更新
   if (op_has_unsed_vars_white_list.count(op.Type()) != 0) {
     return;
   }
+  // 获取线程独有的unusedVarSet
   auto *used_set = GetThreadLocalUsedVarNameSet();
   std::vector<std::string> unsed_input_var_names;
   auto &inferer = op.Info().NoNeedBufferVarsInferer();
@@ -88,10 +105,12 @@ void CheckUnusedVar(const OperatorBase &op, const Scope &scope) {
 
   for (auto &pair : op.Inputs()) {
     // skip no need buffer vars declared
+    // 这里会跳过那些buffer_var，我理解是人家已经只是保留了非数据区信息，可能在其他地方已经gc过一次了？
     if (no_need_buffer_ins.count(pair.first) != 0) {
       VLOG(6) << op.Type() << " " << pair.first;
       continue;
     }
+    // 如果之前没有添加过，这里只做了是否初始化判断，就直接添加了？
     if (used_set->count(pair.first) == 0) {
       for (auto &in_var_name : pair.second) {
         auto *in_var = scope.FindVar(in_var_name);

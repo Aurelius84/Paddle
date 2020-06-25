@@ -21,6 +21,7 @@ namespace framework = paddle::framework;
 namespace platform = paddle::platform;
 
 TEST(Tensor, Dims) {
+    // 只有基本属性，在没有显示调用mutable_data之前，实际不会申请内存
   framework::Tensor tt;
   tt.Resize({2, 3, 4});
   framework::DDim dims = tt.dims();
@@ -35,7 +36,7 @@ TEST(Tensor, DataAssert) {
 
   bool caught = false;
   try {
-    src_tensor.data<double>();
+    src_tensor.data<double>(); // 会做内存检查
   } catch (platform::EnforceNotMet& err) {
     caught = true;
     std::string ex_msg = err.what();

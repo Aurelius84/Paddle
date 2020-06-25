@@ -32,12 +32,12 @@ class Dim : public Array<int64_t, D> {
  public:
   static_assert(D >= 0, "D must be not less than 0");
 
-  static constexpr int kRank = D;
+  static constexpr int kRank = D; // dim的长度
   using BaseClass = Array<int64_t, D>;
 
   inline Dim(int64_t head, const Dim<D - 1>& tail) {
     (*this)[0] = head;
-    new (this->GetMutable() + 1) Dim<D - 1>(tail);
+    new (this->GetMutable() + 1) Dim<D - 1>(tail); // 高阶操作
   }
 
   template <typename... Args>
@@ -47,7 +47,7 @@ class Dim : public Array<int64_t, D> {
   /** Construct a Dim with each dimension set to the given index */
   HOSTDEVICE explicit Dim(int64_t idx) { this->Fill(idx); }
 
-  HOSTDEVICE Dim() = default;
+  HOSTDEVICE Dim() = default;  // 默认构造函数
 
   HOST std::string to_string() const;
 };

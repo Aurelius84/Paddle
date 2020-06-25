@@ -224,6 +224,8 @@ inline std::string SimplifyDemangleStr(std::string str) {
   return str;
 }
 
+// && 是右值引用，右值可以看作是程序运行过程中产生的临时结果。
+// 右值引用可以避免复制提高效率
 template <typename StrType>
 inline std::string GetTraceBackString(StrType&& what, const char* file,
                                       int line) {

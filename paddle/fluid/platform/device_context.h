@@ -45,13 +45,13 @@ limitations under the License. */
 
 namespace paddle {
 namespace platform {
-
+// 抽象基类
 class DeviceContext {
  public:
   virtual ~DeviceContext() PADDLE_MAY_THROW {}
-  virtual Place GetPlace() const = 0;
+  virtual Place GetPlace() const = 0;  // 获取当前DeviceContext所属的Place
 
-  virtual void Wait() const {}
+  virtual void Wait() const {}  // wait函数的作用是做什么的？
 };
 
 class CPUDeviceContext : public DeviceContext {

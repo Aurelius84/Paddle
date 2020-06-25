@@ -22,6 +22,7 @@ bool Allocator::IsAllocThreadSafe() const { return false; }
 
 void Allocator::FreeImpl(Allocation* allocation) {
   Allocator* allocator = allocation->TopDecoratedAllocator();
+  // 返回最外层的分配器指针，调用最外层的free
   allocator->Free(allocation);
 }
 

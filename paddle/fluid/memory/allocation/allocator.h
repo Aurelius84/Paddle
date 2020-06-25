@@ -27,7 +27,7 @@ namespace memory {
 namespace allocation {
 
 // Exception when `Alloc`/`AllocShared` failed
-struct BadAlloc : public std::exception {
+struct BadAlloc : public std::exception { // 继承自sdL::exception
   inline explicit BadAlloc(std::string err_msg, const char* file, int line)
       : err_str_(platform::GetTraceBackString(std::move(err_msg), file, line)) {
   }
@@ -83,9 +83,9 @@ class Allocator;
 class Allocation {
  public:
   inline Allocation(void* ptr, size_t size, platform::Place place)
-      : ptr_(ptr), size_(size), place_(place) {}
+      : ptr_(ptr), size_(size), place_(place) {} // 构造函数可以是内联的
 
-  Allocation(const Allocation& o) = delete;
+  Allocation(const Allocation& o) = delete; // 禁止赋值、和复制构造
   Allocation& operator=(const Allocation& o) = delete;
   Allocation(Allocation&& o) = delete;
   Allocation& operator=(Allocation&& o) = delete;
@@ -106,7 +106,7 @@ class Allocation {
   //    The raw pointer might not aligned, so an offset might be added to raw
   //    the pointer. The size of this allocation will be
   //    `size + kAlignemnt - offset`.
-  inline size_t size() const { return size_; }
+  inline size_t size() const { return size_; } // 这里返回的numel * sizeof(T)，字节数
 
   inline const platform::Place& place() const { return place_; }
 
@@ -120,7 +120,7 @@ class Allocation {
   inline void PopDecoratedAllocator() { decorated_allocators_.pop_back(); }
 
   inline Allocator* TopDecoratedAllocator() {
-    return decorated_allocators_.back();
+    return decorated_allocators_.back(); // 返回最外层装饰的分配器
   }
 
  private:

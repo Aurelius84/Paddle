@@ -22,13 +22,18 @@ namespace paddle {
 namespace framework {
 
 template <typename T, size_t N>
+/*
+ * 为什么要自己实现一个Array类?
+ * 1. 为了支持多设备？
+ * 2. 函数均为inline内联
+ */
 class Array {
  public:
-  static constexpr size_t kSize = N;
+  static constexpr size_t kSize = N; // array的大小，声明为静态变量，有什么特殊作用么？
 
   HOSTDEVICE inline Array() {}
 
-  template <typename... Args>
+  template <typename... Args> // 多参数的模板
   HOSTDEVICE inline explicit Array(const T &val, Args... args) {
     static_assert(N == sizeof...(Args) + 1, "Invalid argument");
     UnrollVarArgsAssign<T>::Run(data_, val, args...);
@@ -38,9 +43,9 @@ class Array {
     UnrollFillConstant<N>::Run(data_, val);
   }
 
-  HOSTDEVICE inline const T *Get() const { return data_; }
+  HOSTDEVICE inline const T *Get() const { return data_; } // const对象调用的函数
 
-  HOSTDEVICE inline T *GetMutable() { return data_; }
+  HOSTDEVICE inline T *GetMutable() { return data_; }  // const函数没有词此函数
 
   HOSTDEVICE inline T &operator[](size_t i) { return *advance(data_, i); }
 
@@ -65,11 +70,12 @@ class Array {
 #ifndef __CUDA_ARCH__
     PADDLE_ENFORCE_LT(i, N, "Array index out of bounds");
 #endif
-    return (*this)[i];
+    return (*this)[i]; // 调用[]操作
   }
 
   HOSTDEVICE constexpr size_t size() const { return N; }
 
+  // 若两个array里的元素值都是相当的，则返回true
   HOSTDEVICE inline bool operator==(const Array<T, N> &other) const {
     return UnrollCompare<N>::Run(data_, other.data_);
   }
@@ -81,14 +87,14 @@ class Array {
  private:
   template <typename U>
   HOSTDEVICE static inline U *advance(U *ptr, size_t i) {
-    return ptr + i;
+    return ptr + i;  // 支持data[i]操作，此操作不会做index越界检查，为了提高性能
   }
 
   T data_[N];
 };
 
 template <typename T>
-class Array<T, 0> {
+class Array<T, 0> { // 特化当N为0时
  public:
   static constexpr size_t kSize = 0;
 

@@ -438,7 +438,7 @@ class OpKernelBase {
    * device resource such as CUDA stream, cublas handle, etc. from
    * ExecutionContext. User should construct it before run the Operator.
    */
-
+  // 继承OpKernelBase的必须实现此函数，才能成为非抽象类
   virtual void Compute(const ExecutionContext& context) const = 0;
 
   virtual ~OpKernelBase() = default;

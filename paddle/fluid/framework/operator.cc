@@ -936,8 +936,15 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
                                  RuntimeContext* runtime_ctx) const {
   platform::DeviceContextPool& pool = platform::DeviceContextPool::Instance();
   auto* dev_ctx = pool.Get(place);
-
+  /*
+   * 1. 判断kernel_type_是否已经设置了
+   * 2. 如果没有被设置，则根据情况选择对应的kernel
+   * 3. 因为有缓存机制，所以ChooseKernel只会调用一次（加锁只会触发一次？）
+   */
   if (kernel_type_.get() == nullptr || kernel_func_.get() == nullptr) {
+    /*
+     * 这里会对kernel_type和kernel_func做缓存，但是会加锁判断是否需要缓存
+     */
     ChooseKernel(*runtime_ctx, scope, place);
   }
 
@@ -947,6 +954,11 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
   {
     platform::RecordEvent record_event("prepare_data",
                                        platform::EventRole::kInnerOp);
+    /*
+     * 什么时候需要设置或更新这个字段？
+     * 1. 在跑完一个batch后更新这个字段，以减少每轮都去判断是否需要transformData
+     * 2. 注意这里包含一个特殊inference的cache机制和while中的考虑
+     */
     if (need_prepare_data_) {
       transfer_scope = PrepareData(scope, *kernel_type_,
                                    &transfered_inplace_vars, runtime_ctx);
@@ -959,14 +971,15 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
   if (!(kernel_type_->place_ == dev_ctx->GetPlace())) {
     dev_ctx = pool.Get(kernel_type_->place_);
   }
-
+  // 默认是false，啥时候会设置或者更新？
   if (!all_kernels_must_compute_runtime_shape_) {
     platform::RecordEvent record_event("infer_shape",
                                        platform::EventRole::kInnerOp);
     RuntimeInferShapeContext infer_shape_ctx(*this, *runtime_ctx);
+    // 执行op的infershape函数，运行时
     this->InferShape(&infer_shape_ctx);
   }
-
+  // 先清空unusedSet，这个是个thread_local变量，只会初始化并创建一次
   if (FLAGS_enable_unused_var_check) {
     GetThreadLocalUsedVarNameSet()->clear();
   }
@@ -976,10 +989,13 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
   {
     platform::RecordEvent record_event("compute",
                                        platform::EventRole::kInnerOp);
+    // 调用kernel的compute逻辑
     (*kernel_func_)(
         ExecutionContext(*this, exec_scope, *dev_ctx, *runtime_ctx));
   }
 
+  // 如果之前在prepareData阶段做过transform，则将数据share从transfer_scope share回去
+  // shareDataWith的方式
   if (!transfered_inplace_vars.empty()) {
     // there is inplace variable has been transferred.
     TransferInplaceVarsBack(scope, transfered_inplace_vars, *transfer_scope);
@@ -989,6 +1005,8 @@ void OperatorWithKernel::RunImpl(const Scope& scope,
     // use attr here because some GradMakers (like ActivationGradOpMaker) add
     // input when use_mkldnn=true;
     if (!(HasAttr("use_mkldnn") && Attr<bool>("use_mkldnn"))) {
+        // 疑问：前面并没有找见一个op执行完，对inputs的变量的释放
+        // 而这个函数会将input中不在NoBufferVars的变量添加大set中，并warning。
       CheckUnusedVar(*this, scope);
     }
   }
@@ -1045,8 +1063,16 @@ void OperatorWithKernel::ChooseKernel(const RuntimeContext& ctx,
 
   OpKernelMap& kernels = kernels_iter->second;
 
+  /*
+   * 这里根据默认的GetExpectedKernelType函数获取kerneltype
+   * 1. 如果某个op没有重写这个函数，那就根据input vars的最后一个var的dataType设置
+   * 2. place用的是ctx.place()
+   */
   auto expected_kernel_key = this->GetExpectedKernelType(
       ExecutionContext(*this, scope, *dev_ctx, ctx));
+  /*
+   * 根据Attr的相关信息更新expected_kernel_key
+   */
   if (HasAttr("op_device")) {
     if (Attr<std::string>("op_device") == "cpu") {
       expected_kernel_key.place_ = platform::CPUPlace();
@@ -1085,11 +1111,19 @@ void OperatorWithKernel::ChooseKernel(const RuntimeContext& ctx,
     kernel_iter = kernels.find(expected_kernel_key);
   }
 #endif
+  /*
+   * 设置完一圈kerenl信息，如果找不到支持这种配置的kernel，那就直接报错
+   */
   if (kernel_iter == kernels.end()) {
     PADDLE_THROW("op %s does not have kernel for %s", type_,
                  KernelTypeToString(expected_kernel_key));
   }
 
+  /*
+   * 加锁
+   * 1.再次确认是否已经cache了kernel_type_，如果没有，那就重新设置kernel_type和kerenl_func
+   * 2. kernel信息是缓存在OperatorWithKernel中的
+   */
   std::lock_guard<std::mutex> lock(cache_update_mutex_);
   if (kernel_type_.get() == nullptr || kernel_func_.get() == nullptr) {
     kernel_type_.reset(new OpKernelType(expected_kernel_key));
@@ -1121,8 +1155,10 @@ Scope* OperatorWithKernel::PrepareData(
     const Scope& scope, const OpKernelType& expected_kernel_key,
     std::vector<std::string>* transfered_inplace_vars,
     RuntimeContext* ctx) const {
+  // transfer后的var都会放到这个scope中
   Scope* new_scope = nullptr;
 
+  // 会保存那些反向op中不要缓存data的var的name
   const std::unordered_set<std::string>* no_buffer_ins = nullptr;
   if (info_) {
     auto& no_buffer_inferer = info_->NoNeedBufferVarsInferer();
@@ -1134,6 +1170,7 @@ Scope* OperatorWithKernel::PrepareData(
   }
 
   for (auto& var_name_item : Inputs()) {
+    // 看下这个input是不是在no_buffer_ins集合中
     bool should_skip_input =
         no_buffer_ins && no_buffer_ins->count(var_name_item.first) > 0;
 
@@ -1144,6 +1181,7 @@ Scope* OperatorWithKernel::PrepareData(
       auto* var = input_vars[i];
 
       // Only tensor can be tranfer to another device.
+      // input里也可能放的不是tensor类型？？需要一个case
       if (var == nullptr || !VarIsTensor(*var)) {
         continue;
       }
@@ -1186,21 +1224,29 @@ Scope* OperatorWithKernel::PrepareData(
 #endif
         continue;
       }
-
+      // 前面只是拿到了Tensor*的指针，还没涉及到内存数据的操作
       if (!tensor_in->IsInitialized()) {
         continue;
       }
-
+      // 这里会调用GetKernelTypeForVar获取对应的kernel_type
       auto kernel_type_for_var = GetKernelTypeForVar(
           var_name_item.first, *tensor_in, expected_kernel_key);
 
+      // 根据当前kernel_type_for_var和实际准备要执行的expected_kernel_key是否一致
+      // 判断是否需要transform数据，place、dtype，layout
       if (!NeedTransform(kernel_type_for_var, expected_kernel_key)) {
         continue;
       }
-
+      /*
+       * 获取包含临时变量的out_var_names
+       */
       auto out_var_names = OutputVars(true);
+      /*
+       * 如果在out_var_names找到了inputs中的var_name
+       */
       if (std::find(out_var_names.begin(), out_var_names.end(), var_name) !=
           out_var_names.end()) {
+        // 记录下次var_name是需要transfer的
         transfered_inplace_vars->emplace_back(var_name);
       }
 
@@ -1225,13 +1271,20 @@ Scope* OperatorWithKernel::PrepareData(
       // not do transfer scope caching, and cpu inference performance is not
       // impacted by test.
       enable_cache_transfer_scope_ = false;
+      /*
+       * 如果一个op不是被excutor调用执行，且将要在GPU跑，
+       * 1. 创建一个新的scope，并cache下来
+       */
       if (!run_by_executor_ &&
           (platform::is_gpu_place(kernel_type_for_var.place_) ||
            platform::is_gpu_place(expected_kernel_key.place_))) {
+        // 这里创建的是个全局scope，根据kernel_type_for_var和expected_kernel_key计算hashkey
+        // 缓存到global_transfer_data_cache
         new_scope = TryCreateTransferScope(kernel_type_for_var,
                                            expected_kernel_key, &scope);
         enable_cache_transfer_scope_ = true;
       }
+      // 如果不是上述条件，直接创建一个子scope
       if (!new_scope) {
         new_scope = &scope.NewScope();
       }
@@ -1310,7 +1363,11 @@ void OperatorWithKernel::ParseInputDataType(
     }
   }
 }
-
+/*
+ * 这里会遍历ctx里的所有input的vars，
+ * 1. 对于每个var可能包含的所有tensor，检查其datatype必须一致，更新data_type
+ * 2. 那这个函数跑完之后，最后的data_type不就是最后那个var对应的dataType么？
+ */
 proto::VarType::Type OperatorWithKernel::IndicateDataType(
     const ExecutionContext& ctx) const {
   proto::VarType::Type dafault_data_type =
@@ -1326,6 +1383,9 @@ proto::VarType::Type OperatorWithKernel::IndicateDataType(
   return data_type;
 }
 
+/*
+ * 这个是会拿到指定var_name的data_type
+ */
 proto::VarType::Type OperatorWithKernel::IndicateVarDataType(
     const ExecutionContext& ctx, const std::string& name) const {
   proto::VarType::Type dafault_data_type =
@@ -1340,11 +1400,18 @@ proto::VarType::Type OperatorWithKernel::IndicateVarDataType(
   return data_type;
 }
 
+/*
+ * 那这个岂不是就是会按照input vars列表中的最后一个var的dataType设置kernel的type
+ * 1. 好像只设置的是data_type, place用的是ctx的，其他的设置使用的默认的
+ */
 OpKernelType OperatorWithKernel::GetExpectedKernelType(
     const ExecutionContext& ctx) const {
   return OpKernelType(IndicateDataType(ctx), ctx.GetPlace());
 }
 
+/*
+ * 这个是通过指定的var_name和tensor，设置其data_type, place, 和layout
+ */
 OpKernelType OperatorWithKernel::GetKernelTypeForVar(
     const std::string& var_name, const Tensor& tensor,
     const OpKernelType& expected_kernel_type) const {

@@ -81,6 +81,7 @@ template <size_t kStart, size_t kEnd, bool kStop>
 struct UnrollCompare {
   template <typename T>
   HOSTDEVICE inline static bool Run(const T *d1, const T *d2) {
+      // 这里的直接用==是判断的地址还是数值，如果是数值的话，那float的相等不会有问题么？
     return d1[kStart] == d2[kStart] &&
            UnrollCompare<kStart + 1, kEnd, kStart + 1 == kEnd>::Run(d1, d2);
   }
@@ -113,11 +114,12 @@ struct UnrollProduct<kStart, kEnd, true> {
 
 }  // namespace detail
 
+// 函数别名
 template <size_t N>
 using UnrollFillConstant = detail::UnrollFillConstant<0, N, N == 0>;
 
 template <size_t N>
-using UnrollAssign = detail::UnrollAssign<0, N, N == 0>;
+using UnrollAssign = detail::UnrollAssign</*->kStart*/0, /*->kEnd*/N, /*->stop*/N == 0>;
 
 template <typename T>
 using UnrollVarArgsAssign = detail::UnrollVarArgsAssign<T>;
