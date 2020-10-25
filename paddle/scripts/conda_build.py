@@ -42,7 +42,6 @@ requirements:
     - nltk
     - scipy
     - requests
-    - pyyaml
     - pillow
     - graphviz
     - protobuf
@@ -51,6 +50,7 @@ requirements:
     - astor
     - gast>=0.3.3
     - matplotlib
+    - opencv>=3.4.2
 """
 
         self.requirement_run_windows = r"""
@@ -61,7 +61,6 @@ requirements:
     - nltk
     - scipy
     - requests
-    - pyyaml
     - pillow
     - graphviz
     - protobuf
@@ -70,7 +69,7 @@ requirements:
     - gast>=0.3.3
     - py-cpuinfo==5.0.0
 """
-        self.test = """
+        self.test = r"""
 test:
   import:
     paddle
@@ -88,13 +87,11 @@ about:
 pip install /package/objgraph-3.4.1.tar.gz
 pip install /package/prettytable-0.7.tar.gz
 pip install /package/rarfile-3.0.tar.gz --no-deps
-pip install /package/funcsigs-1.0.2.tar.gz
 """
 
         self.blt_const = r""" 
 pip install C:\package\objgraph-3.4.1.tar.gz
 pip install C:\package\prettytable-0.7.tar.gz
-pip install C:\package\funcsigs-1.0.2.tar.gz
 pip install C:\package\rarfile-3.0.tar.gz --no-deps
 git clone https://github.com/PaddlePaddle/recordio.git
 cd recordio\python
@@ -219,9 +216,16 @@ package:
     - matplotlib"""
     if not (cuda_str == None):
         meta_str = meta_str + cuda_str
-    meta_str = meta_str + var.test + var.about
+    
     blt_str = var.blt_const + blt_var
-
+    if (python_str == var.python27):
+        blt_str = blt_str + """
+    pip install C:\package\opencv_python-4.2.0.32-cp27-cp27m-win_amd64.whl"""
+    else:
+        meta_str = meta_str + """
+    - opencv>=3.4.2"""
+    
+    meta_str = meta_str + var.test + var.about
     meta_filename = "meta.yaml"
     build_filename = "bld.bat"
     with open(meta_filename, 'w') as f:

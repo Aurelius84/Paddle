@@ -13,9 +13,15 @@
 // limitations under the License.
 
 #include "paddle/fluid/framework/tensor.h"
+
 #include <gtest/gtest.h>
 #include <string>
-#include "paddle/fluid/platform/float16.h"
+
+namespace paddle {
+namespace platform {
+struct float16;
+}  // namespace platform
+}  // namespace paddle
 
 namespace framework = paddle::framework;
 namespace platform = paddle::platform;
@@ -42,7 +48,7 @@ TEST(Tensor, DataAssert) {
     std::string ex_msg = err.what();
     EXPECT_TRUE(ex_msg.find("holder_ should not be null") != std::string::npos);
     EXPECT_TRUE(ex_msg.find("Tensor holds no memory. Call "
-                            "Tensor::mutable_data first.") !=
+                            "Tensor::mutable_data firstly.") !=
                 std::string::npos);
   }
   ASSERT_TRUE(caught);
@@ -158,7 +164,7 @@ TEST(Tensor, ShareDataWith) {
       EXPECT_TRUE(ex_msg.find("holder_ should not be null") !=
                   std::string::npos);
       EXPECT_TRUE(ex_msg.find("Tensor holds no memory. Call "
-                              "Tensor::mutable_data first.") !=
+                              "Tensor::mutable_data firstly.") !=
                   std::string::npos);
     }
     ASSERT_TRUE(caught);

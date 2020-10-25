@@ -107,10 +107,12 @@ def conv3dtranspose_forward_naive(input_, filter_, attrs):
     return out
 
 
-class TestConv3dTransposeOp(OpTest):
+class TestConv3DTransposeOp(OpTest):
     def setUp(self):
         # init as conv transpose
         self.use_cudnn = False
+        self.check_no_input = False
+        self.check_no_filter = False
         self.data_format = 'NCHW'
         self.pad = [0, 0, 0]
         self.padding_algorithm = "EXPLICIT"
@@ -163,7 +165,7 @@ class TestConv3dTransposeOp(OpTest):
                 'Output',
                 max_relative_error=0.03,
                 no_grad_set=set(['Filter']))
-        else:
+        elif self.check_no_filter:
             self.check_grad(
                 ['Input'],
                 'Output',
@@ -178,7 +180,7 @@ class TestConv3dTransposeOp(OpTest):
                 'Output',
                 max_relative_error=0.03,
                 no_grad_set=set(['Input']))
-        else:
+        elif self.check_no_input:
             self.check_grad(
                 ['Filter'],
                 'Output',
@@ -198,8 +200,9 @@ class TestConv3dTransposeOp(OpTest):
         self.op_type = "conv3d_transpose"
 
 
-class TestWithSymmetricPad(TestConv3dTransposeOp):
+class TestWithSymmetricPad(TestConv3DTransposeOp):
     def init_test_case(self):
+        self.check_no_input = True
         self.pad = [1, 1, 1]
         self.stride = [1, 1, 1]
         self.dilations = [1, 1, 1]
@@ -209,7 +212,7 @@ class TestWithSymmetricPad(TestConv3dTransposeOp):
         self.filter_size = [f_c, 6, 3, 3, 3]
 
 
-class TestWithAsymmetricPad(TestConv3dTransposeOp):
+class TestWithAsymmetricPad(TestConv3DTransposeOp):
     def init_test_case(self):
         self.pad = [1, 0, 1, 0, 1, 2]
         self.stride = [1, 1, 1]
@@ -220,7 +223,7 @@ class TestWithAsymmetricPad(TestConv3dTransposeOp):
         self.filter_size = [f_c, 6, 3, 3, 3]
 
 
-class TestWithSAMEPad(TestConv3dTransposeOp):
+class TestWithSAMEPad(TestConv3DTransposeOp):
     def init_test_case(self):
         self.stride = [1, 1, 2]
         self.dilations = [1, 2, 1]
@@ -231,7 +234,7 @@ class TestWithSAMEPad(TestConv3dTransposeOp):
         self.padding_algorithm = 'SAME'
 
 
-class TestWithVALIDPad(TestConv3dTransposeOp):
+class TestWithVALIDPad(TestConv3DTransposeOp):
     def init_test_case(self):
         self.stride = [2, 1, 1]
         self.dilations = [1, 1, 1]
@@ -242,7 +245,19 @@ class TestWithVALIDPad(TestConv3dTransposeOp):
         self.padding_algorithm = 'VALID'
 
 
-class TestWithGroups(TestConv3dTransposeOp):
+class TestWithStride(TestConv3DTransposeOp):
+    def init_test_case(self):
+        self.check_no_filter = True
+        self.pad = [1, 1, 1]
+        self.stride = [2, 2, 2]
+        self.dilations = [1, 1, 1]
+        self.groups = 1
+        self.input_size = [2, 3, 5, 5, 5]  # NCDHW
+        f_c = self.input_size[1]
+        self.filter_size = [f_c, 6, 3, 3, 3]
+
+
+class TestWithGroups(TestConv3DTransposeOp):
     def init_test_case(self):
         self.pad = [1, 1, 1]
         self.stride = [1, 1, 1]
@@ -253,18 +268,7 @@ class TestWithGroups(TestConv3dTransposeOp):
         self.filter_size = [f_c, 3, 3, 3, 3]
 
 
-class TestWithStride(TestConv3dTransposeOp):
-    def init_test_case(self):
-        self.pad = [1, 1, 1]
-        self.stride = [2, 2, 2]
-        self.dilations = [1, 1, 1]
-        self.groups = 1
-        self.input_size = [2, 3, 5, 5, 5]  # NCDHW
-        f_c = self.input_size[1]
-        self.filter_size = [f_c, 6, 3, 3, 3]
-
-
-class TestWithDilation(TestConv3dTransposeOp):
+class TestWithDilation(TestConv3DTransposeOp):
     def init_test_case(self):
         self.pad = [1, 1, 1]
         self.stride = [1, 1, 1]
@@ -275,7 +279,7 @@ class TestWithDilation(TestConv3dTransposeOp):
         self.filter_size = [f_c, 6, 3, 3, 3]
 
 
-class Test_NHWC(TestConv3dTransposeOp):
+class Test_NHWC(TestConv3DTransposeOp):
     def init_test_case(self):
         self.pad = [0, 0, 0]
         self.stride = [1, 1, 1]
@@ -287,70 +291,10 @@ class Test_NHWC(TestConv3dTransposeOp):
         self.data_format = 'NHWC'
 
 
-class TestWithSymmetricPad_NHWC(TestConv3dTransposeOp):
-    def init_test_case(self):
-        self.pad = [1, 1, 1]
-        self.stride = [1, 1, 1]
-        self.dilations = [1, 1, 1]
-        self.groups = 1
-        self.input_size = [2, 5, 5, 5, 3]  # NDHWC
-        f_c = self.input_size[-1]
-        self.filter_size = [f_c, 6, 3, 3, 3]
-        self.data_format = 'NHWC'
-
-
-class TestWithAsymmetricPad_NHWC(TestConv3dTransposeOp):
-    def init_test_case(self):
-        self.pad = [1, 0, 1, 0, 1, 2]
-        self.stride = [1, 1, 1]
-        self.dilations = [1, 1, 1]
-        self.groups = 1
-        self.input_size = [2, 5, 5, 5, 3]  # NDHWC
-        f_c = self.input_size[-1]
-        self.filter_size = [f_c, 6, 3, 3, 3]
-        self.data_format = 'NHWC'
-
-
-class TestWithGroups_NHWC(TestConv3dTransposeOp):
-    def init_test_case(self):
-        self.pad = [1, 1, 1]
-        self.stride = [1, 1, 1]
-        self.dilations = [1, 1, 1]
-        self.groups = 2
-        self.input_size = [2, 5, 5, 5, 4]  # NDHWC
-        f_c = self.input_size[-1]
-        self.filter_size = [f_c, 3, 3, 3, 3]
-        self.data_format = 'NHWC'
-
-
-class TestWithStride_NHWC(TestConv3dTransposeOp):
-    def init_test_case(self):
-        self.pad = [1, 1, 1]
-        self.stride = [2, 2, 2]
-        self.dilations = [1, 1, 1]
-        self.groups = 1
-        self.input_size = [2, 5, 5, 5, 3]  # NCDHW
-        f_c = self.input_size[-1]
-        self.filter_size = [f_c, 6, 3, 3, 3]
-        self.data_format = 'NHWC'
-
-
-class TestWithDilation_NHWC(TestConv3dTransposeOp):
-    def init_test_case(self):
-        self.pad = [1, 1, 1]
-        self.stride = [1, 1, 1]
-        self.dilations = [2, 2, 2]
-        self.groups = 1
-        self.input_size = [2, 5, 5, 5, 3]  # NCDHW
-        f_c = self.input_size[-1]
-        self.filter_size = [f_c, 6, 3, 3, 3]
-        self.data_format = 'NHWC'
-
-
 # ------------ test_cudnn ------------
 @unittest.skipIf(not core.is_compiled_with_cuda(),
                  "core is not compiled with CUDA")
-class TestCUDNN(TestConv3dTransposeOp):
+class TestCUDNN(TestConv3DTransposeOp):
     def init_op_type(self):
         self.use_cudnn = True
         self.op_type = "conv3d_transpose"
@@ -475,7 +419,7 @@ class TestCUDNNWithGroups(TestWithGroups):
 
 @unittest.skipIf(not core.is_compiled_with_cuda(),
                  "core is not compiled with CUDA")
-class TestCUDNN_NHWC(TestConv3dTransposeOp):
+class TestCUDNN_NHWC(TestConv3DTransposeOp):
     def init_test_case(self):
         self.pad = [0, 0, 0]
         self.stride = [1, 1, 1]
@@ -561,132 +505,6 @@ class TestCUDNNWithGroups_NHWC(TestWithGroups):
     def init_op_type(self):
         self.use_cudnn = True
         self.op_type = "conv3d_transpose"
-
-
-class TestConv3dTransposeAPI(unittest.TestCase):
-    def test_case1(self):
-        data1 = fluid.layers.data(
-            name='data1', shape=[3, 5, 5, 5], dtype='float32')
-        data2 = fluid.layers.data(
-            name='data2', shape=[5, 5, 5, 3], dtype='float32')
-
-        out1 = fluid.layers.conv3d_transpose(
-            input=data1,
-            groups=1,
-            num_filters=6,
-            filter_size=3,
-            data_format='NCDHW')
-        out2 = fluid.layers.conv3d_transpose(
-            input=data2,
-            groups=1,
-            num_filters=6,
-            filter_size=3,
-            data_format='NDHWC')
-        out3 = fluid.layers.conv3d_transpose(
-            input=data1,
-            groups=1,
-            num_filters=6,
-            filter_size=3,
-            padding=[[0, 0], [0, 0], [1, 1], [0, 0], [1, 1]],
-            data_format='NCDHW')
-        out4 = fluid.layers.conv3d_transpose(
-            input=data2,
-            groups=3,
-            num_filters=6,
-            filter_size=3,
-            padding=[[0, 0], [0, 0], [1, 1], [1, 2], [0, 0]],
-            data_format='NDHWC')
-        out5 = fluid.layers.conv3d_transpose(
-            input=data2,
-            groups=1,
-            num_filters=6,
-            filter_size=3,
-            padding='SAME',
-            data_format='NCDHW')
-        out6 = fluid.layers.conv3d_transpose(
-            input=data2,
-            groups=1,
-            num_filters=6,
-            filter_size=3,
-            padding='VALID',
-            data_format='NDHWC')
-        out7 = fluid.layers.conv3d_transpose(
-            input=data2,
-            groups=1,
-            num_filters=6,
-            output_size=[7, 7, 7],
-            padding=[0, 0, 0],
-            data_format='NDHWC')
-
-        data1_np = np.random.random((2, 3, 5, 5, 5)).astype("float32")
-        data2_np = np.random.random((2, 5, 5, 5, 3)).astype("float32")
-
-        if core.is_compiled_with_cuda():
-            place = core.CUDAPlace(0)
-        else:
-            place = core.CPUPlace()
-        exe = fluid.Executor(place)
-        exe.run(fluid.default_startup_program())
-        results = exe.run(
-            fluid.default_main_program(),
-            feed={"data1": data1_np,
-                  "data2": data2_np},
-            fetch_list=[out1, out2, out3, out4, out5, out6, out7],
-            return_numpy=True)
-        self.assertIsNotNone(results[0])
-        self.assertIsNotNone(results[1])
-        self.assertIsNotNone(results[2])
-        self.assertIsNotNone(results[3])
-        self.assertIsNotNone(results[4])
-        self.assertIsNotNone(results[5])
-        self.assertIsNotNone(results[6])
-
-
-class TestConv3dTransposeOpException(unittest.TestCase):
-    def test_exception(self):
-        data = fluid.layers.data(
-            name='data', shape=[3, 5, 5, 5], dtype="float32")
-
-        def attr_data_format():
-            out = fluid.layers.conv2d_transpose(
-                input=data,
-                groups=1,
-                num_filters=6,
-                filter_size=3,
-                data_format="NCDW")
-
-        self.assertRaises(ValueError, attr_data_format)
-
-        def attr_padding_str():
-            out = fluid.layers.conv2d_transpose(
-                input=data,
-                groups=1,
-                num_filters=6,
-                filter_size=3,
-                padding='Vald')
-
-        self.assertRaises(ValueError, attr_padding_str)
-
-        def attr_padding_list():
-            out = fluid.layers.conv2d_transpose(
-                input=data,
-                groups=1,
-                num_filters=6,
-                filter_size=3,
-                padding=[[1, 1], [1, 1], [0, 0], [0, 0], [1, 1]])
-
-        self.assertRaises(ValueError, attr_padding_list)
-
-        def attr_padding_with_data_format():
-            out = fluid.layers.conv2d_transpose(
-                input=data,
-                groups=1,
-                num_filters=6,
-                filter_size=3,
-                padding=[[1, 1], [0, 0], [0, 0], [1, 0], [1, 1]],
-                data_format='NDHWC')
-
-        self.assertRaises(ValueError, attr_padding_with_data_format)
 
 
 if __name__ == '__main__':

@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <vector>
+#include <set>
+
 #include "paddle/fluid/framework/executor.h"
-#include "paddle/fluid/framework/lod_tensor_array.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
-#include "paddle/fluid/framework/var_type.h"
 #include "paddle/fluid/operators/controlflow/while_op_helper.h"
+
+namespace paddle {
+namespace framework {
+class InferShapeContext;
+class OpDesc;
+class VarDesc;
+}  // namespace framework
+}  // namespace paddle
 
 namespace paddle {
 namespace operators {
@@ -77,6 +84,24 @@ class WhileOp : public framework::OperatorBase {
     auto *program = block->Program();
     // step 2:
     // 获取StepScopeVar（scope的vector），每个scope用于保存对应step下的vars
+    bool is_test = Attr<bool>("is_test");
+
+    std::set<std::string> no_copy_var_names;
+    if (!is_test) {
+      const std::vector<framework::OpDesc *> &all_ops = block->AllOps();
+      for (const framework::OpDesc *op : all_ops) {
+        const framework::VariableNameMap &input_var_names = op->Inputs();
+        const framework::VariableNameMap &output_var_names = op->Outputs();
+        for (auto &ipt : input_var_names) {
+          for (const std::string &var_name : ipt.second) {
+            if (StrInVaraiableNameMap(var_name, output_var_names)) {
+              no_copy_var_names.insert(var_name);
+            }
+          }
+        }
+      }
+    }
+
     auto step_scopes =
         scope.FindVar(Output(kStepScopes))->GetMutable<StepScopeVar>();
 
@@ -109,8 +134,32 @@ class WhileOp : public framework::OperatorBase {
         // 1. 每次都会在scope里创建一个新的子scope，append到step_scopes
         auto &current_scope = scope.NewScope();
         step_scopes->push_back(&current_scope);
+
+        std::vector<std::string> rename_vars;
+        for (const std::string &input_var_name : Inputs(kX)) {
+          if (no_copy_var_names.find(input_var_name) ==
+              no_copy_var_names.end()) {
+            std::string input_var_rename = input_var_name + kSuffix;
+            framework::Variable *input_var = scope.FindVar(input_var_name);
+            if (input_var->IsType<framework::LoDTensor>()) {
+              rename_vars.push_back(input_var_rename);
+              auto input_var_tensor = input_var->Get<LoDTensor>();
+              auto *rename_input_var_tensor =
+                  current_scope.Var(input_var_rename)->GetMutable<LoDTensor>();
+              framework::TensorCopy(input_var_tensor, dev_place,
+                                    rename_input_var_tensor);
+              rename_input_var_tensor->set_lod(input_var_tensor.lod());
+            }
+          }
+        }
         executor.RunPreparedContext(ctx.get(), &current_scope, false, true,
                                     true);
+
+        for (auto &var_rename : rename_vars) {
+          std::string input_var_name =
+              var_rename.substr(0, var_rename.size() - strlen(kSuffix));
+          current_scope.Rename(var_rename, input_var_name);
+        }
         cond_data =
             GetCondData(scope.FindVar(Input(kCondition))->Get<LoDTensor>());
       }
@@ -329,6 +378,10 @@ class WhileGradOp : public framework::OperatorBase {
         //    continue;
         //  }
 
+        auto var_iter =
+            std::find(outside_og_names.begin(), outside_og_names.end(),
+                      pg_ig_names[param_id]);
+
         // zero gradient variable in step 0
         if (cur_scope_iter == step_scopes->rbegin()) {
           auto *var = (*cur_scope_iter)->FindVar(inside_grad_name);
@@ -345,7 +398,8 @@ class WhileGradOp : public framework::OperatorBase {
           // zero gradient操作只对LoDTensor的var生效了
           // TODO(src_learn):
           // 前面对LoDTensorArray也做了判断，这里为什么不对其进行zero gradient
-          if (var->IsType<LoDTensor>()) {
+          if ((var_iter == outside_og_names.end()) &&
+              var->IsType<LoDTensor>()) {
             auto &inside_tensor = var->Get<framework::LoDTensor>();
             framework::AttributeMap attrs;
             attrs["dtype"] = inside_tensor.type();
@@ -365,15 +419,18 @@ class WhileGradOp : public framework::OperatorBase {
                 ->set_lod(inside_tensor.lod());
           }
         }
-        // inside_grad_name为while内部对应的var的grad name
-        auto new_inside_name = cur_scope.Rename(inside_grad_name);
-        auto sum_op = framework::OpRegistry::CreateOp(
-            "sum", {{"X", {pg_ig_names[param_id], new_inside_name}}},
-            {{"Out", {pg_ig_names[param_id]}}},
-            framework::AttributeMap{{"use_mkldnn", {false}}});
-        sum_op->Run(cur_scope, dev_place);
-        // 重命名回来，可能其他地方会需要？
-        cur_scope.Rename(new_inside_name, inside_grad_name);
+        auto var_outside = scope.FindVar(pg_ig_names[param_id]);
+        if ((var_iter == outside_og_names.end()) ||
+            ((var_iter != outside_og_names.end()) &&
+             var_outside->IsType<framework::LoDTensorArray>())) {
+          auto new_inside_name = cur_scope.Rename(inside_grad_name);
+          auto sum_op = framework::OpRegistry::CreateOp(
+              "sum", {{"X", {pg_ig_names[param_id], new_inside_name}}},
+              {{"Out", {pg_ig_names[param_id]}}},
+              framework::AttributeMap{{"use_mkldnn", {false}}});
+          sum_op->Run(cur_scope, dev_place);
+          cur_scope.Rename(new_inside_name, inside_grad_name);
+        }
       }
       dev_ctx.Wait();
       const_cast<framework::Scope &>(scope).DeleteScope(&cur_scope);

@@ -36,14 +36,14 @@ endif()
 
 # fluid_modules exclude API-interface of inference/api and inference/capi
 get_property(fluid_modules GLOBAL PROPERTY FLUID_MODULES)
-get_property(cuda_modules GLOBAL PROPERTY CUDA_MODULES)
 
 add_subdirectory(api)
 
 # Create static inference library if needed
 # All static libs in inference/api
-set(STATIC_INFERENCE_API paddle_inference_api analysis_predictor zero_copy_tensor reset_tensor_array
-              analysis_config paddle_pass_builder activation_functions ${mkldnn_quantizer_cfg})
+set(STATIC_INFERENCE_API paddle_inference_api analysis_predictor
+     zero_copy_tensor reset_tensor_array 
+        analysis_config paddle_pass_builder activation_functions ${mkldnn_quantizer_cfg})
 create_static_lib(paddle_fluid ${fluid_modules} ${STATIC_INFERENCE_API})
 
 if(NOT APPLE)
@@ -88,7 +88,7 @@ if(NOT APPLE AND NOT WIN32)
   set_target_properties(paddle_fluid_shared PROPERTIES LINK_FLAGS "${LINK_FLAGS}")
   # check symbol hidden
   FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/check_symbol.cmake
-    "execute_process(COMMAND bash -c \"${CMAKE_CURRENT_SOURCE_DIR}/check_symbol.sh"
+    "execute_process(COMMAND sh -c \"${CMAKE_CURRENT_SOURCE_DIR}/check_symbol.sh"
     " ${CMAKE_CURRENT_BINARY_DIR}/libpaddle_fluid.so\" RESULT_VARIABLE symbol_res)\n"
     "if(NOT \"\${symbol_res}\" STREQUAL \"0\")\n"
     "  message(FATAL_ERROR \"Check symbol failed.\")\n"

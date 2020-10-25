@@ -21,6 +21,7 @@ limitations under the License. */
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
 #include "paddle/fluid/framework/ir/graph.h"
 #include "paddle/fluid/framework/ir/node.h"
 #include "paddle/fluid/framework/program_desc.h"
@@ -29,6 +30,7 @@ limitations under the License. */
 namespace paddle {
 namespace framework {
 namespace ir {
+class Graph;
 template <typename PassType>
 struct PassRegistrar;
 
@@ -55,8 +57,9 @@ class Pass {
   // Get a reference to the attributed previously set.
   template <typename AttrType>
   AttrType &Get(const std::string &attr_name) const {
-    PADDLE_ENFORCE(attrs_.find(attr_name) != attrs_.end(),
-                   "%s attr not registered for pass.", attr_name);
+    PADDLE_ENFORCE_NE(attrs_.find(attr_name), attrs_.end(),
+                      platform::errors::InvalidArgument(
+                          "Attribute %s not registered for pass.", attr_name));
     try {
       return *boost::any_cast<AttrType *>(attrs_.at(attr_name));
     } catch (boost::bad_any_cast &) {
@@ -76,7 +79,7 @@ class Pass {
       };
 
       PADDLE_THROW(platform::errors::InvalidArgument(
-          "Invalid type for attritube %s, expected: %s, actual: %s", attr_name,
+          "Invalid type for attritube %s, expected: %s, actual: %s.", attr_name,
           TypeToString(typeid(AttrType *)),
           TypeToString(attrs_.at(attr_name).type())));
     }
@@ -101,9 +104,10 @@ class Pass {
   template <typename AttrType>
   void Set(const std::string &attr_name, AttrType *attr) {
     if (default_pass_attrs_.count(attr_name) == 0) {
-      PADDLE_ENFORCE_EQ(attrs_.count(attr_name), 0,
-                        platform::errors::InvalidArgument(
-                            "Attribute %s already set in the pass", attr_name));
+      PADDLE_ENFORCE_EQ(
+          attrs_.count(attr_name), 0,
+          platform::errors::AlreadyExists(
+              "Attribute %s already set in the pass.", attr_name));
     } else {
       VLOG(3) << "Setting the attribute " << attr_name << " for the pass "
               << type_;
@@ -119,15 +123,16 @@ class Pass {
   // should delete the attribute.
   template <typename AttrType>
   void SetNotOwned(const std::string &attr_name, AttrType *attr) {
-    PADDLE_ENFORCE(attrs_.count(attr_name) == 0, "%s already set in the pass",
-                   attr_name);
+    PADDLE_ENFORCE_EQ(attrs_.count(attr_name), 0,
+                      platform::errors::AlreadyExists(
+                          "Attribute %s already set in the pass.", attr_name));
     attrs_[attr_name] = attr;
   }
 
  protected:
   virtual void ApplyImpl(Graph *graph) const {
     PADDLE_THROW(platform::errors::Unimplemented(
-        "The virtual Pass called is not implemented."));
+        "The virtual pass called is not implemented."));
   }
 
   // Some Pass must be placed before this Pass, and some
@@ -198,8 +203,9 @@ class PassRegistry {
   }
 
   std::unique_ptr<Pass> Get(const std::string &pass_type) const {
-    PADDLE_ENFORCE(Has(pass_type), "Pass %s has not been registered",
-                   pass_type);
+    PADDLE_ENFORCE_EQ(Has(pass_type), true,
+                      platform::errors::InvalidArgument(
+                          "Pass %s has not been registered.", pass_type));
     return map_.at(pass_type)();
   }
 
@@ -213,8 +219,10 @@ class PassRegistry {
 template <typename PassType>
 struct PassRegistrar : public Registrar {
   explicit PassRegistrar(const char *pass_type) {
-    PADDLE_ENFORCE(!PassRegistry::Instance().Has(pass_type),
-                   "'%s' is registered more than once.", pass_type);
+    PADDLE_ENFORCE_EQ(
+        PassRegistry::Instance().Has(pass_type), false,
+        platform::errors::AlreadyExists(
+            "Pass '%s' is registered more than once.", pass_type));
     PassRegistry::Instance().Insert(
         pass_type, [this, pass_type]() -> std::unique_ptr<Pass> {
           std::unique_ptr<Pass> pass(new PassType());

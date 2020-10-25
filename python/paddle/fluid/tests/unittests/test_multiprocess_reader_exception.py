@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
 import paddle.fluid as fluid
-from paddle.fluid.io import multiprocess_reader
+from paddle.reader import multiprocess_reader
 import unittest
 import numpy as np
 import six
@@ -77,7 +78,7 @@ class TestMultiprocessReaderException(unittest.TestCase):
                     reader.decorate_sample_generator(
                         decorated_reader,
                         batch_size=batch_size,
-                        places=fluid.cuda_places())
+                        places=fluid.cuda_places(0))
                 else:
                     reader.decorate_sample_generator(
                         decorated_reader,

@@ -27,10 +27,20 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
 #include "paddle/fluid/framework/framework.pb.h"
 #include "paddle/fluid/framework/ir/graph.h"
 #include "paddle/fluid/framework/ir/node.h"
 #include "paddle/fluid/inference/analysis/dot.h"
+
+namespace paddle {
+namespace framework {
+namespace ir {
+class Graph;
+class Node;
+}  // namespace ir
+}  // namespace framework
+}  // namespace paddle
 
 namespace paddle {
 namespace framework {
@@ -231,7 +241,7 @@ class PDPattern {
 
   std::vector<std::unique_ptr<PDNode>> nodes_;
   std::vector<edge_t> edges_;
-  std::unordered_map<std::string, PDNode*> node_map_;
+  std::map<std::string, PDNode*> node_map_;
   static size_t id_;
 };
 
@@ -263,7 +273,7 @@ class PDPattern {
  */
 class GraphPatternDetector {
  public:
-  using subgraph_t = std::unordered_map<PDNode*, Node*>;
+  using subgraph_t = std::map<PDNode*, Node*>;
 
   // Operate on the detected pattern.
   using handle_t =
@@ -1120,6 +1130,56 @@ struct MultipleQuantize : public PatternBase {
   PATTERN_DECL_NODE(prev_out);
 };
 
+struct QuantizePlacement : public PatternBase {
+  QuantizePlacement(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "quantize_placement") {}
+  PDNode* operator()(
+      const std::unordered_set<std::string>& quantize_enabled_op_types);
+
+  PATTERN_DECL_NODE(op);
+};
+
+struct Bfloat16Placement : public PatternBase {
+  Bfloat16Placement(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "bfloat16_placement") {}
+  PDNode* operator()(
+      const std::unordered_set<std::string>& bfloat16_enabled_op_types);
+
+  PATTERN_DECL_NODE(op);
+};
+
+struct OrphanedBfloat16 : public PatternBase {
+  OrphanedBfloat16(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "orphaned_bfloat16") {}
+  PDNode* operator()();
+
+  PATTERN_DECL_NODE(prev_op);
+  PATTERN_DECL_NODE(prev_out);
+  PATTERN_DECL_NODE(op);
+  PATTERN_DECL_NODE(op_out);
+  PATTERN_DECL_NODE(next_op);
+};
+
+struct LastBfloat16Ops : public PatternBase {
+  LastBfloat16Ops(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "last_bfloat16_ops") {}
+  PDNode* operator()();
+
+  PATTERN_DECL_NODE(op);
+  PATTERN_DECL_NODE(op_out);
+  PATTERN_DECL_NODE(next_op);
+};
+
+struct FirstBfloat16Ops : public PatternBase {
+  FirstBfloat16Ops(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "first_bfloat16_ops") {}
+  PDNode* operator()();
+
+  PATTERN_DECL_NODE(prev_op);
+  PATTERN_DECL_NODE(op_in);
+  PATTERN_DECL_NODE(op);
+};
+
 // Pattern used for enforcing inplace computation for in-place computation
 // supporting DNNL ops. softmax, batch_norm and layer_norm
 struct MKLDNNInPlace : public PatternBase {
@@ -1150,14 +1210,28 @@ struct TransposeFlattenConcat : public PatternBase {
   }
 };
 
-struct QuantDequantOpFuse : public PatternBase {
-  QuantDequantOpFuse(PDPattern* pattern, const std::string& name_scope)
-      : PatternBase(pattern, name_scope, "quant_dequant_fuse") {}
+struct DeleteQuantOpFuse : public PatternBase {
+  DeleteQuantOpFuse(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "delete_quant_fuse") {}
 
-  void operator()(PDNode* quant_op_input, const std::string& op_name,
-                  const std::string& weight_name, int times,
-                  const std::string& quant_type,
-                  const std::string& dequant_type);
+  void operator()(PDNode* input_act_node, const std::string& quant_type);
+
+  std::string GetNodeName(const std::string& op_type) {
+    return PDNodeName(name_scope_, repr_, id_, op_type);
+  }
+
+  PDNode* GetPDNode(const std::string& op_type) {
+    return pattern->RetrieveNode(GetNodeName(op_type));
+  }
+};
+
+struct DequantOpFuse : public PatternBase {
+  DequantOpFuse(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "dequant_fuse") {}
+
+  void operator()(PDNode* quant_op_input, const std::string& quantized_op_type,
+                  const std::string& dequant_type,
+                  const std::string& weight_name);
 
   std::string GetNodeName(const std::string& op_type) {
     return PDNodeName(name_scope_, repr_, id_, op_type);
@@ -1236,6 +1310,21 @@ struct MatmulTransposeReshapePattern : public PatternBase {
   PATTERN_DECL_NODE(reshape_op);
   PATTERN_DECL_NODE(reshape_out);
   PATTERN_DECL_NODE(reshape_out_xshape);
+};
+
+// fusion_gru op
+// Forward pass for fusion_gru.
+// fusion_gru out is a result of the operator.
+struct FusionGru : public PatternBase {
+  FusionGru(PDPattern* pattern, const std::string& name_scope)
+      : PatternBase(pattern, name_scope, "fusion_gru") {}
+
+  PDNode* operator()();
+  PATTERN_DECL_NODE(op);
+  PATTERN_DECL_NODE(x);
+  PATTERN_DECL_NODE(weight_h);
+  PATTERN_DECL_NODE(weight_x);
+  PATTERN_DECL_NODE(out);
 };
 
 }  // namespace patterns

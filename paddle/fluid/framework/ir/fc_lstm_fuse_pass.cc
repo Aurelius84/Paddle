@@ -15,11 +15,15 @@
 #include "paddle/fluid/framework/ir/fc_lstm_fuse_pass.h"
 #include <string>
 #include <unordered_set>
+
 #include "paddle/fluid/framework/lod_tensor.h"
+#include "paddle/fluid/framework/op_version_registry.h"
 
 namespace paddle {
 namespace framework {
 namespace ir {
+
+class Node;
 
 int BuildFusion(Graph* graph, const std::string& name_scope, Scope* scope,
                 bool with_fc_bias) {
@@ -52,13 +56,17 @@ int BuildFusion(Graph* graph, const std::string& name_scope, Scope* scope,
 #undef SET_IN
     if (with_fc_bias) {
       // Add FC-bias with LSTM-bias and create a new weight
-      PADDLE_ENFORCE(scope);
+      PADDLE_ENFORCE_NOT_NULL(
+          scope, platform::errors::InvalidArgument("Scope cannot be nullptr."));
       const std::string& new_bias_var = patterns::UniqueKey("NewBias");
       auto* bias_var = scope->Var(new_bias_var);
-      PADDLE_ENFORCE(bias_var);
+      PADDLE_ENFORCE_NOT_NULL(bias_var, platform::errors::InvalidArgument(
+                                            "Bias var ptr cannot be nullptr."));
       auto* bias_tensor = bias_var->GetMutable<framework::LoDTensor>();
       auto* lstm_bias_var = scope->FindVar(bias->Name());
-      PADDLE_ENFORCE(lstm_bias_var);
+      PADDLE_ENFORCE_NOT_NULL(lstm_bias_var,
+                              platform::errors::InvalidArgument(
+                                  "Lstm bias var ptr cannot be nullptr."));
       const auto& lstm_bias_tensor = lstm_bias_var->Get<framework::LoDTensor>();
       bias_tensor->Resize(lstm_bias_tensor.dims());
 
@@ -192,3 +200,17 @@ void FCLstmFusePass::ApplyImpl(ir::Graph* graph) const {
 
 REGISTER_PASS(mul_lstm_fuse_pass, paddle::framework::ir::MulLstmFusePass);
 REGISTER_PASS(fc_lstm_fuse_pass, paddle::framework::ir::FCLstmFusePass);
+
+REGISTER_PASS_CAPABILITY(fc_lstm_fuse_pass)
+    .AddCombination(
+        paddle::framework::compatible::OpVersionComparatorCombination()
+            .EQ("mul", 0)
+            .EQ("elementwise_add", 0)
+            .EQ("lstm", 0)
+            .EQ("fusion_lstm", 0));
+REGISTER_PASS_CAPABILITY(mul_lstm_fuse_pass)
+    .AddCombination(
+        paddle::framework::compatible::OpVersionComparatorCombination()
+            .EQ("mul", 0)
+            .EQ("lstm", 0)
+            .EQ("fusion_lstm", 0));
