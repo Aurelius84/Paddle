@@ -15,13 +15,12 @@
 import os
 
 from utils import paddle_includes, extra_compile_args
-from paddle.utils.cpp_extension import CUDAExtension, setup
+from paddle.utils.cpp_extension import CUDAExtension, CppExtension, setup
 
 setup(
     name='simple_setup_relu2',
-    ext_modules=CUDAExtension(  # test for not specific name here.
-        sources=[
-            'relu_op_simple.cc', 'relu_op_simple.cu', 'relu_op3_simple.cc'
-        ],  # test for multi ops
+    ext_modules=CppExtension(  # test for not specific name here.
+        sources=['relu_op_simple.cc',
+                 'relu_op3_simple.cc'],  # test for multi ops
         include_dirs=paddle_includes,
         extra_compile_args=extra_compile_args))

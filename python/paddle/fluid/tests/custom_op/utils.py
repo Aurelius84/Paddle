@@ -31,3 +31,5 @@ paddle_includes = [
 # and will lead to ABI problem on Coverage CI. We will handle it in next PR.
 extra_compile_args = ['-DPADDLE_WITH_MKLDNN'
                       ] if six.PY2 and not IS_WINDOWS else []
+
+extra_compile_args = []
