@@ -25,7 +25,7 @@ limitations under the License. */
 DECLARE_bool(convert_all_blocks);
 PHI_DECLARE_bool(use_mkldnn);
 #ifdef PADDLE_WITH_CINN
-DECLARE_bool(use_cinn);
+PHI_DECLARE_bool(use_cinn);
 #endif
 
 namespace paddle {
